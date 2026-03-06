@@ -1,0 +1,6 @@
+{
+  "extends": [
+    "next/core-web-vitals",  // Next.js recommended rules
+    "plugin:@typescript-eslint/recommended"  // TypeScript rules
+  ]
+}

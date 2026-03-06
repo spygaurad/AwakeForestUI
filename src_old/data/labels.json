@@ -1,0 +1,76 @@
+{
+  "labels": [
+    {
+      "id": "label-1767223446337-ryzexyhur",
+      "name": "palm",
+      "color": "hsl(91, 70%, 55%)",
+      "projectId": null,
+      "createdAt": "2025-12-31T23:24:06.337Z",
+      "updatedAt": "2025-12-31T23:24:06.337Z"
+    },
+    {
+      "id": "label-1767223452147-hd9qwuklt",
+      "name": "leaf",
+      "color": "hsl(212, 70%, 55%)",
+      "projectId": null,
+      "createdAt": "2025-12-31T23:24:12.147Z",
+      "updatedAt": "2025-12-31T23:24:12.147Z"
+    },
+    {
+      "id": "label-1767369791523-ghg1qdklj",
+      "name": "pine",
+      "color": "hsl(257, 70%, 55%)",
+      "projectId": "1399f70c-fb9b-4f2e-a57f-cacd02fe46de",
+      "createdAt": "2026-01-02T16:03:11.523Z",
+      "updatedAt": "2026-01-02T16:03:11.523Z"
+    },
+    {
+      "id": "label-1768428453518-7tu1vz1wc",
+      "name": "sharp leaf",
+      "color": "#ee8787",
+      "projectId": "b15bd9c0-ddc3-4b4f-8bac-ed347cdc478a",
+      "createdAt": "2026-01-14T22:07:33.518Z",
+      "updatedAt": "2026-01-14T22:07:33.518Z"
+    },
+    {
+      "id": "label-1768497671151-5def53r6x",
+      "name": "gold mining",
+      "color": "hsl(353, 70%, 55%)",
+      "projectId": "1399f70c-fb9b-4f2e-a57f-cacd02fe46de",
+      "createdAt": "2026-01-15T17:21:11.151Z",
+      "updatedAt": "2026-01-15T17:21:11.151Z"
+    },
+    {
+      "id": "label-1768498750326-nndczgcnw",
+      "name": "banana",
+      "color": "#c8e109",
+      "projectId": "1399f70c-fb9b-4f2e-a57f-cacd02fe46de",
+      "createdAt": "2026-01-15T17:39:10.326Z",
+      "updatedAt": "2026-01-15T17:39:10.326Z"
+    },
+    {
+      "id": "label-1768499113683-0jh2oatvt",
+      "name": "coral fish",
+      "color": "#d95454",
+      "projectId": "7bb91939-c78c-4dd4-859e-40a57292e354",
+      "createdAt": "2026-01-15T17:45:13.683Z",
+      "updatedAt": "2026-01-15T17:45:13.683Z"
+    },
+    {
+      "id": "label-1770880805775-qfdd33k38",
+      "name": "pine",
+      "color": "#b51a00",
+      "projectId": "cfe92af6-8ca9-4969-98d6-e2ea931aa482",
+      "createdAt": "2026-02-12T07:20:05.775Z",
+      "updatedAt": "2026-02-12T07:20:05.775Z"
+    },
+    {
+      "id": "label-1770881097970-utgf69mic",
+      "name": "crown_center",
+      "color": "hsl(86, 70%, 55%)",
+      "projectId": "cfe92af6-8ca9-4969-98d6-e2ea931aa482",
+      "createdAt": "2026-02-12T07:24:57.970Z",
+      "updatedAt": "2026-02-12T07:24:57.970Z"
+    }
+  ]
+}

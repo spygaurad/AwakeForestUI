@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    overflow-y: scroll;
+  }
+
+  body {
+    @apply text-gray-900;
+    min-height: 100vh;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+
+  :root {
+    --background: 40 33% 98%;
+    --foreground: 30 20% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 30 20% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 20% 10%;
+    --primary: 38 64% 36%;
+    --primary-foreground: 40 33% 98%;
+    --secondary: 40 20% 94%;
+    --secondary-foreground: 30 20% 15%;
+    --muted: 40 15% 94%;
+    --muted-foreground: 30 10% 45%;
+    --accent: 40 30% 90%;
+    --accent-foreground: 38 64% 30%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 38 20% 88%;
+    --input: 38 20% 88%;
+    --ring: 38 64% 36%;
+    --radius: 0.5rem;
+    --chart-1: 38 64% 36%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --app-max-w: 1200px;
+  }
+
+  .dark {
+    --background: 30 15% 8%;
+    --foreground: 40 15% 92%;
+    --card: 30 12% 10%;
+    --card-foreground: 40 15% 92%;
+    --popover: 30 12% 10%;
+    --popover-foreground: 40 15% 92%;
+    --primary: 38 60% 50%;
+    --primary-foreground: 30 20% 5%;
+    --secondary: 30 10% 18%;
+    --secondary-foreground: 40 15% 85%;
+    --muted: 30 10% 18%;
+    --muted-foreground: 40 10% 55%;
+    --accent: 30 12% 22%;
+    --accent-foreground: 38 60% 55%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 30 10% 22%;
+    --input: 30 10% 22%;
+    --ring: 38 60% 50%;
+  }
+}
+
+@layer components {
+  .container-custom {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .container-compact {
+    max-width: var(--app-max-w);
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+  }
+
+  .page-header {
+    margin-bottom: 0.75rem;
+  }
+
+  .page-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+  }
+
+  .page-description {
+    font-size: 0.875rem;
+    @apply text-gray-600;
+  }
+
+  .topnav-compact {
+    height: 48px;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-primary-50;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-primary-300 rounded;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-primary-400;
+}
+
+:focus-visible {
+  outline: 2px solid #8c6d2c99;
+  outline-offset: 2px;
+}
+
+/* Range slider — bronze theme */
+input[type='range'] {
+  @apply w-full h-2 rounded-lg appearance-none cursor-pointer bg-primary-100;
+}
+input[type='range']::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 rounded-full bg-primary-500 border border-primary-700;
+  box-shadow: 0 0 2px rgba(140, 109, 44, 0.5);
+}
+input[type='range']::-moz-range-thumb {
+  @apply w-4 h-4 rounded-full bg-primary-500 border border-primary-700;
+  box-shadow: 0 0 2px rgba(140, 109, 44, 0.5);
+}
+input[type='range']:hover::-webkit-slider-thumb {
+  @apply bg-primary-400;
+}
+input[type='range']:active::-webkit-slider-thumb {
+  @apply bg-primary-600;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
