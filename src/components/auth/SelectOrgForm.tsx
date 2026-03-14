@@ -23,7 +23,7 @@ export default function SelectOrgForm() {
     setError('');
     try {
       await setActive({ organization: orgId });
-      router.push('/dashboard');
+      router.push('/workspace');
     } catch {
       setError('Could not select organization. Please try again.');
       setLoadingOrgId(null);
@@ -39,7 +39,7 @@ export default function SelectOrgForm() {
     try {
       const org = await createOrganization({ name: orgName.trim() });
       await setActive({ organization: org.id });
-      router.push('/dashboard');
+      router.push('/workspace');
     } catch (err: any) {
       const msg = err?.errors?.[0]?.longMessage ?? 'Could not create organization.';
       setError(msg);

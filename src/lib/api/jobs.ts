@@ -1,24 +1,13 @@
 import { apiClient } from './client';
-import type { Job, JobStatus, JobType } from '@/types/common';
-import type { PaginatedResponse } from '@/types/common';
-
-interface JobListParams {
-  org_id: string;
-  status?: JobStatus;
-  job_type?: JobType;
-  page?: number;
-  page_size?: number;
-}
+import { EP } from './endpoints';
+import type { Job } from '@/types/common';
 
 export const jobsApi = {
-  list: (params: JobListParams) =>
-    apiClient
-      .get('jobs', { searchParams: params as unknown as Record<string, string | number> })
-      .json<PaginatedResponse<Job>>(),
-
+  /**
+   * Poll a single job's status. This is the only job endpoint the backend exposes.
+   * For a list of in-flight jobs, use jobStore (Zustand) which tracks job IDs
+   * client-side after each 202 response.
+   */
   get: (id: string) =>
-    apiClient.get(`jobs/${id}`).json<Job>(),
-
-  cancel: (id: string) =>
-    apiClient.patch(`jobs/${id}/cancel`).json<Job>(),
+    apiClient.get(EP.jobs.detail(id)).json<Job>(),
 };

@@ -10,7 +10,7 @@ export function middleware(req: NextRequest) {
 
   if ((pathname === '/login' || pathname === '/register') && hasToken) {
     const url = req.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = '/workspace';
     return NextResponse.redirect(url);
   }
 

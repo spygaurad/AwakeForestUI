@@ -1,15 +1,19 @@
 import { apiClient } from './client';
+import { EP } from './endpoints';
 import type { MLModel, ModelType } from '@/types/api';
 import type { PaginatedResponse } from '@/types/common';
 
 export const modelsApi = {
-  list: (orgId: string, type?: ModelType) =>
+  // Org is scoped automatically via JWT — no org_id query param needed
+  list: (params?: { type?: ModelType; project_id?: string; page?: number; page_size?: number }) =>
     apiClient
-      .get('models', { searchParams: { org_id: orgId, ...(type ? { type } : {}) } })
+      .get(EP.models.list, {
+        searchParams: (params ?? {}) as Record<string, string | number>,
+      })
       .json<PaginatedResponse<MLModel>>(),
 
   get: (id: string) =>
-    apiClient.get(`models/${id}`).json<MLModel>(),
+    apiClient.get(EP.models.detail(id)).json<MLModel>(),
 
   create: (data: {
     name: string;
@@ -18,11 +22,11 @@ export const modelsApi = {
     artifact_uri: string;
     config?: Record<string, unknown>;
   }) =>
-    apiClient.post('models', { json: data }).json<MLModel>(),
+    apiClient.post(EP.models.create, { json: data }).json<MLModel>(),
 
-  update: (id: string, data: Partial<Pick<MLModel, 'name' | 'config'>>) =>
-    apiClient.patch(`models/${id}`, { json: data }).json<MLModel>(),
+  update: (id: string, data: Partial<Pick<MLModel, 'name' | 'version' | 'artifact_uri' | 'config'>>) =>
+    apiClient.patch(EP.models.update(id), { json: data }).json<MLModel>(),
 
   delete: (id: string) =>
-    apiClient.delete(`models/${id}`).json<void>(),
+    apiClient.delete(EP.models.delete(id)).json<void>(),
 };

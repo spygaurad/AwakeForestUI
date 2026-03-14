@@ -1,11 +1,18 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Geist } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Toaster } from 'sonner';
 import { QueryProvider } from '@/lib/query-client';
+import { theme } from '@/lib/theme';
 import './globals.css';
+import { cn } from "@/lib/utils";
 
-const inter = Inter({ subsets: ['latin'] });
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'AwakeForest',
@@ -24,21 +31,21 @@ export default function RootLayout({
     <ClerkProvider
       appearance={{
         variables: {
-          colorPrimary: '#8c6d2c',
-          colorBackground: '#ffffff',
-          colorText: '#1c1917',
+          colorPrimary: theme.primary,
+          colorBackground: theme.almondCream,
+          colorText: theme.ebony,
           borderRadius: '0.5rem',
         },
         elements: {
           card: 'shadow-lg border border-primary-100',
           formButtonPrimary:
-            'bg-primary-600 hover:bg-primary-700 text-white transition-colors',
-          footerActionLink: 'text-primary-600 hover:text-primary-700',
+            'bg-primary text-primary-foreground hover:bg-primary-600 transition-colors',
+          footerActionLink: 'text-primary hover:text-primary-600',
         },
       }}
     >
-      <html lang="en">
-        <body className={inter.className}>
+      <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
+        <body>
           <QueryProvider>
             {children}
             <Toaster richColors position="top-right" />

@@ -1,11 +1,34 @@
 import ky, { type Options } from 'ky';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8011/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+/**
+ * Token getter registered by the React layer (SessionSync or any auth-aware component).
+ * Falls back to window.Clerk.session.getToken() as a last resort.
+ */
+let _tokenGetter: (() => Promise<string | null>) | null = null;
+
+export function registerTokenGetter(fn: () => Promise<string | null>) {
+  _tokenGetter = fn;
+}
+
+async function getAuthToken(): Promise<string | null> {
+  if (_tokenGetter) {
+    return _tokenGetter();
+  }
+  // Fallback: try window.Clerk directly
+  try {
+    const clerk = (window as unknown as { Clerk?: { session?: { getToken: () => Promise<string | null> } } }).Clerk;
+    return (await clerk?.session?.getToken()) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Client-side ky instance.
  * Automatically injects the Clerk session JWT as a Bearer token.
- * Use this in client components and feature hooks.
+ * Register a token getter via registerTokenGetter() for reliable auth.
  */
 export const apiClient = ky.create({
   prefixUrl: API_BASE,
@@ -13,17 +36,9 @@ export const apiClient = ky.create({
   hooks: {
     beforeRequest: [
       async (request) => {
-        // Clerk exposes the active session on window.Clerk
-        const token = await (window as any).Clerk?.session?.getToken();
+        const token = await getAuthToken();
         if (token) {
           request.headers.set('Authorization', `Bearer ${token}`);
-        }
-      },
-    ],
-    afterResponse: [
-      async (_request, _options, response) => {
-        if (!response.ok) {
-          // Let ky throw its HTTPError; callers can catch and read response.json()
         }
       },
     ],

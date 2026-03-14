@@ -27,6 +27,18 @@ export interface Project {
   updated_at: string;
 }
 
+// --- Maps (work units inside a project) ---
+export interface ProjectMap {
+  id: string;
+  project_id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProjectMember {
   project_id: string;
   user_id: string;
@@ -40,7 +52,8 @@ export type DatasetStatus = 'pending' | 'running' | 'completed' | 'failed';
 export interface Dataset {
   id: string;
   organization_id: string;
-  project_id: string;
+  /** All projects this dataset is linked to (junction table). Use project_id filter on list endpoint to scope. */
+  project_ids: string[];
   name: string;
   stac_collection_id: string | null;
   source_uri: string;
@@ -258,5 +271,50 @@ export interface AuditLogEntry {
   entity_type: string;
   entity_id: string | null;
   payload: Record<string, unknown>;
+  created_at: string;
+}
+
+// --- Map Layer State ---
+
+export interface LayerStyle {
+  fillColor: string;
+  fillOpacity: number; // 0–1
+  strokeColor: string;
+  strokeWidth: number;
+  strokeEnabled: boolean;
+  labelField?: string;
+  categorizeField?: string;
+}
+
+export type MapLayerType =
+  | 'dataset'
+  | 'annotation'
+  | 'tracking'
+  | 'alerts'
+  | 'project_ref'
+  | 'basemap';
+
+export interface MapLayerEntry {
+  id: string;
+  name: string;
+  type: MapLayerType;
+  visible: boolean;
+  style: LayerStyle;
+  /** For project_ref layers — the project being referenced */
+  sourceProjectId?: string;
+  sourceProjectName?: string;
+  /** For dataset layers */
+  datasetId?: string;
+}
+
+/** A pointer from one project's map to another project's data layer. Backend entity. */
+export interface ProjectLayerRef {
+  id: string;
+  map_project_id: string;
+  source_project_id: string;
+  source_type: 'datasets' | 'annotations' | 'tracking' | 'alerts';
+  source_item_id?: string;
+  name: string;
+  style: LayerStyle;
   created_at: string;
 }

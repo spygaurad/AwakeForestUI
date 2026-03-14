@@ -1,23 +1,26 @@
-import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
-import TopNav from '@/components/layout/TopNav';
-import Sidebar from '@/components/layout/Sidebar';
-import { SessionSync } from '@/components/SessionSync';
+// app/layout.tsx
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "@/styles/globals.css"; // your global CSS
+import { Providers } from "./providers";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { userId, orgId } = await auth();
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
-  if (!userId) redirect('/sign-in');
-  if (!orgId) redirect('/select-org');
+export const metadata: Metadata = {
+  title: "AwakeForest",
+  description: "Forest mapping and AI platform",
+};
 
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <div className="min-h-screen bg-background">
-      <SessionSync />
-      <TopNav />
-      <Sidebar />
-      <main className="relative z-30 pt-12 sm:pl-16 transition-[padding] duration-200 ease-out">
-        <div className="container-compact py-4">{children}</div>
-      </main>
-    </div>
+    <html lang="en" className={inter.variable}>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
   );
 }

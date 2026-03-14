@@ -1,23 +1,27 @@
 import { apiClient } from './client';
+import { EP } from './endpoints';
 import type { LabelSchema } from '@/types/api';
+import type { PaginatedResponse } from '@/types/common';
 
 export const labelSchemasApi = {
-  list: (orgId: string) =>
-    apiClient.get('label-schemas', { searchParams: { org_id: orgId } }).json<LabelSchema[]>(),
+  // Filter by project_id (org is scoped automatically via JWT)
+  list: (params?: { project_id?: string; page?: number; page_size?: number }) =>
+    apiClient
+      .get(EP.labelSchemas.list, {
+        searchParams: (params ?? {}) as Record<string, string | number>,
+      })
+      .json<PaginatedResponse<LabelSchema>>(),
 
   get: (id: string) =>
-    apiClient.get(`label-schemas/${id}`).json<LabelSchema>(),
+    apiClient.get(EP.labelSchemas.detail(id)).json<LabelSchema>(),
 
   create: (data: {
     name: string;
     project_id: string;
     labels: LabelSchema['labels'];
   }) =>
-    apiClient.post('label-schemas', { json: data }).json<LabelSchema>(),
-
-  update: (id: string, data: Partial<Pick<LabelSchema, 'name' | 'labels'>>) =>
-    apiClient.patch(`label-schemas/${id}`, { json: data }).json<LabelSchema>(),
+    apiClient.post(EP.labelSchemas.create, { json: data }).json<LabelSchema>(),
 
   delete: (id: string) =>
-    apiClient.delete(`label-schemas/${id}`).json<void>(),
+    apiClient.delete(EP.labelSchemas.delete(id)).json<void>(),
 };
