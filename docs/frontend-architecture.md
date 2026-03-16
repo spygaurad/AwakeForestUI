@@ -29,9 +29,10 @@ Versions reflect what is **actually installed** in `package.json`.
 | Icons                  | `lucide-react`                                     | 0.294.x   | Clean, consistent icon set.                                                                         |
 | Date handling          | `date-fns`                                         | **3.x**   | Temporal range pickers, relative time display.                                                      |
 | HTTP client            | `ky`                                               | 1.x       | Thin fetch wrapper; works in RSC + client; interceptors for auth headers.                          |
-| File upload            | `@uppy/core` + `@uppy/aws-s3` + `@uppy/dashboard` | **3.x**   | Direct‑to‑S3 multipart upload for large rasters; progress events.                                   |
+| File upload            | `@uppy/core` + `@uppy/aws-s3` + `@uppy/dashboard` | **5.x**   | Direct‑to‑S3 multipart upload for large rasters; progress events.                                   |
 | Notifications          | `sonner`                                           | **2.x**   | Toast for job completion / alert triggers.                                                          |
-| Animations             | `tailwindcss-animate`                              | 1.x       | Required by shadcn/ui.                                                                               |
+| Animations             | `tailwindcss-animate` + `tw-animate-css`           | 1.x       | Required by shadcn/ui; tw-animate-css imported in globals.css.                                       |
+| Display font           | `Cormorant Garamond` (next/font/google)            | —         | Editorial serif for landing page and marketing headings; `--font-display` CSS var.                  |
 
 ### 📦 Removed Packages
 
@@ -42,105 +43,96 @@ Versions reflect what is **actually installed** in `package.json`.
 | `axios`          | Redundant with `ky`; now using `ky` throughout (configured with Clerk auth interceptor). |
 | `react-dropzone` | Replaced with Uppy (which includes drop + multipart upload).                             |
 
+> **Actual installed versions (verified against `package.json`):**
+> `@clerk/nextjs` 7.x · `zustand` 4.x · `zod` 4.x · `date-fns` 3.x · `sonner` 2.x ·
+> `@uppy/*` 5.x · `@tanstack/react-table` 8.x · `recharts` 2.x · `@turf/turf` 7.x
+
 ---
 
 ## 🎨 Theming & Brand Settings
 
-Branding is centralized for easy global changes. The platform uses **Tailwind CSS** with a custom theme extended in `tailwind.config.ts`. All brand colors are defined as CSS custom properties (variables) in `src/app/globals.css` and referenced in both the Tailwind config and Clerk appearance.
+Branding is centralized across three files. The platform uses an **autumn forest palette** — burnt sienna, warm amber, sage green, and parchment — expressed as **OKLCH** CSS variables for perceptual uniformity.
 
-### 1. CSS Variables (globals.css)
+### Canonical brand colors (`src/lib/theme.ts`)
+
+| Token | Hex | Use |
+|---|---|---|
+| `coffeeBean` | `#7f5539` | Primary brand action (buttons, links, accents) |
+| `camel` | `#a68a64` | Secondary / muted elements |
+| `almondCream` | `#ede0d4` | Accent fills, card backgrounds |
+| `dustyOlive` | `#656d4a` | Success states, alternate CTAs |
+| `ebony` | `#414833` | Sidebar, dark section backgrounds |
+| `parchment` | `#f5ede0` | Page background (light mode) |
+
+### 1. CSS Variables (`src/app/globals.css`)
+
+All semantic tokens use **OKLCH** — perceptually uniform, predictable alpha scaling:
 
 ```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+:root {
+  /* Autumn raw palette */
+  --coffee-bean:  oklch(0.44 0.10 39);  /* #7f5539 burnt sienna  */
+  --camel:        oklch(0.64 0.07 58);  /* #a68a64 warm amber    */
+  --almond-cream: oklch(0.93 0.03 74);  /* #ede0d4 parchment     */
+  --dusty-olive:  oklch(0.48 0.06 133); /* #656d4a sage green    */
+  --ebony:        oklch(0.28 0.04 133); /* #414833 deep forest   */
 
-@layer base {
-  :root {
-    /* Golden brown palette */
-    --primary-50: 250 248 244;  /* #faf8f4 */
-    --primary-100: 245 240 232; /* #f5f0e8 */
-    --primary-300: 219 196 162; /* #dbc4a2 */
-    --primary-500: 140 109 44;  /* #8c6d2c */
-    --primary-600: 126 98 40;   /* #7e6228 */
-    --primary-700: 105 82 33;   /* #695221 */
-
-    /* Semantic aliases */
-    --background: 255 255 255;
-    --foreground: 0 0 0;
-    --border: var(--primary-100);
-    --ring: var(--primary-500);
-  }
-
-  .dark {
-    /* Dark mode overrides (optional) */
-    --background: 10 10 10;
-    --foreground: 255 255 255;
-    --primary-500: 160 129 64;
-  }
+  /* Semantic mappings */
+  --primary:            oklch(0.44 0.10 39);  /* burnt sienna     */
+  --primary-foreground: oklch(0.97 0.02 74);  /* parchment        */
+  --background:         oklch(0.97 0.02 74);  /* warm parchment   */
+  --foreground:         oklch(0.22 0.04 133); /* deep forest      */
+  --sidebar:            oklch(0.28 0.04 133); /* ebony            */
 }
 ```
 
 ### 2. Tailwind Configuration (`tailwind.config.ts`)
 
+Color references use `oklch(var(--token) / <alpha-value>)` to correctly compose with Tailwind's opacity modifier syntax (e.g. `bg-primary/80`). The `primary.*` numeric scale (50–900) uses hardcoded hex values for direct use without CSS vars.
+
 ```ts
-import type { Config } from 'tailwindcss';
-
-const config: Config = {
-  darkMode: 'class', // or 'media'
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: 'rgb(var(--primary-50) / <alpha-value>)',
-          100: 'rgb(var(--primary-100) / <alpha-value>)',
-          300: 'rgb(var(--primary-300) / <alpha-value>)',
-          500: 'rgb(var(--primary-500) / <alpha-value>)',
-          600: 'rgb(var(--primary-600) / <alpha-value>)',
-          700: 'rgb(var(--primary-700) / <alpha-value>)',
-        },
-        border: 'rgb(var(--border) / <alpha-value>)',
-        ring: 'rgb(var(--ring) / <alpha-value>)',
-        background: 'rgb(var(--background) / <alpha-value>)',
-        foreground: 'rgb(var(--foreground) / <alpha-value>)',
-      },
-    },
-  },
-  plugins: [require('tailwindcss-animate')],
-};
-
-export default config;
+primary: {
+  500: '#7f5539',   // direct Tailwind classes: bg-primary-500
+  DEFAULT: 'oklch(var(--primary) / <alpha-value>)',   // bg-primary
+  foreground: 'oklch(var(--primary-foreground) / <alpha-value>)',
+}
 ```
 
-### 3. Using the Theme in Components
-
-All shadcn/ui components automatically consume these CSS variables. For custom components, use Tailwind classes like `bg-primary-500`, `text-primary-700`, or the semantic `bg-background` and `text-foreground`.
-
-### 4. Clerk Theming with CSS Variables
-
-In `app/layout.tsx`, the `ClerkProvider` uses the same CSS variable for its primary color:
+### 3. Clerk Theming (`src/app/layout.tsx`)
 
 ```tsx
+import { theme } from '@/lib/theme';
+
 <ClerkProvider
   appearance={{
-    variables: { colorPrimary: 'rgb(var(--primary-500))' },
+    variables: {
+      colorPrimary:    theme.primary,      // '#7f5539'
+      colorBackground: theme.almondCream,
+      colorText:       theme.ebony,
+    },
     elements: {
       formButtonPrimary: 'bg-primary-600 hover:bg-primary-700',
-      footerActionLink: 'text-primary-600',
+      footerActionLink:  'text-primary-600',
     },
   }}
 >
 ```
 
+### 4. Display Typography
+
+The landing page uses **Cormorant Garamond** (`next/font/google`) as `--font-display` for editorial headings. Body text uses **Geist** via `--font-sans`. Import the display font where needed:
+
+```ts
+import { Cormorant_Garamond } from 'next/font/google';
+const display = Cormorant_Garamond({ subsets: ['latin'], weight: ['400','600','700'], variable: '--font-display' });
+```
+
 ### 5. Changing the Brand Globally
 
-To change the entire website's look:
-
-1. Update the CSS variable values in `globals.css`.
-2. (Optional) Adjust the Tailwind config if new color stops are needed.
-3. The new colors will propagate to all components, including Clerk.
-
-This centralized approach ensures consistency and makes rebranding trivial.
+1. Update `src/lib/theme.ts` hex values.
+2. Update the matching `oklch()` values in `src/app/globals.css`.
+3. Update the numeric scale in `tailwind.config.ts` if needed.
+4. All components (shadcn/ui, Clerk, scrollbars, range sliders) inherit automatically.
 
 ---
 

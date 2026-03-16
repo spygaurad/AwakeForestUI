@@ -28,6 +28,15 @@ export const EP = {
     detail: (id: string) => `projects/${id}`,
     update: (id: string) => `projects/${id}`,
     delete: (id: string) => `projects/${id}`,
+    members: (id: string) => `projects/${id}/members`,
+  },
+
+  maps: {
+    list: (projectId: string) => `projects/${projectId}/maps`,
+    create: (projectId: string) => `projects/${projectId}/maps`,
+    detail: (id: string) => `maps/${id}`,
+    update: (id: string) => `maps/${id}`,
+    delete: (id: string) => `maps/${id}`,
   },
 
   jobs: {
