@@ -12,7 +12,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8011/ap
  * (e.g. invited users who accepted before the webhook was live, or webhook failures).
  */
 export async function POST() {
-  const { userId, orgId, getToken } = await auth();
+  const { userId, getToken } = await auth();
 
   if (!userId) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
@@ -27,7 +27,6 @@ export async function POST() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ org_id: orgId }),
     });
 
     if (!res.ok) {

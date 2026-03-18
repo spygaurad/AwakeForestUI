@@ -1,6 +1,7 @@
 'use client';
 
 import { SignUp } from '@clerk/nextjs';
+import { theme } from '@/lib/theme';
 
 export default function SignUpForm() {
   return (
@@ -10,7 +11,7 @@ export default function SignUpForm() {
       signInUrl="/sign-in"
       forceRedirectUrl="/select-org"
       appearance={{
-        variables: { colorPrimary: '#8c6d2c' },
+        variables: { colorPrimary: theme.primary },
       }}
     />
   );

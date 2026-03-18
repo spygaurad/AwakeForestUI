@@ -1,0 +1,99 @@
+export type LayerType = 'dataset' | 'annotation' | 'tracking' | 'alert';
+
+/** Source types matching the backend API (ui-leaflet-integration-guide §11) */
+export type LayerSourceType = 'dataset' | 'stac_item' | 'tile_service';
+
+export interface LayerStyle {
+  color: string;
+  fillColor: string;
+  fillOpacity: number;
+  weight: number;
+  radius: number;
+  dashArray?: string;
+}
+
+export const DEFAULT_ANNOTATION_STYLE: LayerStyle = {
+  color: '#c4985c',
+  fillColor: '#c4985c',
+  fillOpacity: 0.3,
+  weight: 2,
+  radius: 6,
+};
+
+export const DEFAULT_TRACKING_STYLE: LayerStyle = {
+  color: '#6bcc6b',
+  fillColor: '#6bcc6b',
+  fillOpacity: 0.7,
+  weight: 2,
+  radius: 8,
+};
+
+export const DEFAULT_ALERT_STYLE: LayerStyle = {
+  color: '#e05c5c',
+  fillColor: '#e05c5c',
+  fillOpacity: 0.6,
+  weight: 2,
+  radius: 10,
+};
+
+export const DEFAULT_DATASET_STYLE: LayerStyle = {
+  color: '#5c8ce0',
+  fillColor: '#5c8ce0',
+  fillOpacity: 0.1,
+  weight: 1.5,
+  radius: 6,
+};
+
+export const DEFAULT_TILE_SERVICE_STYLE: LayerStyle = {
+  color: '#8a7eb8',
+  fillColor: '#8a7eb8',
+  fillOpacity: 0.1,
+  weight: 1,
+  radius: 6,
+};
+
+export interface LayerConfig {
+  id: string;
+  type: LayerType;
+  sourceType?: LayerSourceType;
+  visible: boolean;
+  opacity: number;
+  style: LayerStyle;
+  /** z_index for layer ordering (0 = bottom). Synced with backend. */
+  zIndex: number;
+  /** Populated after TileJSON fetch — enables COG tile rendering via L.tileLayer */
+  tileUrl?: string;
+  tileBounds?: [number, number, number, number]; // [west, south, east, north]
+  tileMinZoom?: number;
+  tileMaxZoom?: number;
+  /** For tile_service layers — the raw URL template */
+  tileServiceUrl?: string;
+  /** For stac_item layers — which dataset this item belongs to */
+  parentDatasetId?: string;
+  /** For stac_item layers — the STAC item ID */
+  stacItemId?: string;
+}
+
+export interface SelectedFeature {
+  layerType: LayerType;
+  /** Registry key — e.g. 'annotation-polygon', 'tracking', 'alert' */
+  featureType: string;
+  featureId: string;
+  properties: Record<string, unknown>;
+  latlng: [number, number];
+  /** Reference to the actual Leaflet layer for live-style updates via registry applyUpdate */
+  layerRef?: unknown;
+}
+
+// 'new-annotation' = user just drew a shape via Geoman, right panel shows attribute form
+// 'measurement'    = measurement tool is active, right panel shows live segment data
+// 'dataset'        = dataset layer row clicked, shows metadata + tile controls
+// 'items'          = browsing individual STAC items within a dataset
+export type RightPanelMode = 'none' | 'feature' | 'style' | 'new-annotation' | 'measurement' | 'dataset' | 'items';
+
+export interface PendingAnnotation {
+  label: string;
+  description: string;
+  style: LayerStyle;
+  attributes: { key: string; value: string }[];
+}
