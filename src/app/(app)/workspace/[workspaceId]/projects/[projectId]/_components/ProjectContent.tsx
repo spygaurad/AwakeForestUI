@@ -285,10 +285,10 @@ function MapsTab({
 }) {
   const { data, isLoading } = useQuery({
     queryKey: qk.maps.list(projectId),
-    queryFn: () => mapsApi.list(projectId),
+    queryFn: () => mapsApi.list(projectId as string),
   });
 
-  const maps = data?.items ?? MOCK_MAPS;
+  const maps = data?.items ?? [];
 
   if (isLoading) {
     return (
@@ -389,8 +389,8 @@ function MapsTab({
 // ── Datasets tab ─────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, { dot: string; label: string }> = {
-  completed: { dot: '#656d4a', label: 'Ready' },
-  running:   { dot: '#a68a64', label: 'Ingesting' },
+  ready:     { dot: '#656d4a', label: 'Ready' },
+  ingesting: { dot: '#a68a64', label: 'Ingesting' },
   pending:   { dot: '#a68a64', label: 'Pending' },
   failed:    { dot: '#b35e4c', label: 'Failed' },
 };
@@ -398,10 +398,10 @@ const STATUS_COLORS: Record<string, { dot: string; label: string }> = {
 function DatasetsTab({ projectId }: { projectId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: qk.datasets.list({ project_id: projectId }),
-    queryFn: () => datasetsApi.list(),
+    queryFn: () => datasetsApi.list({ project_id: projectId }),
   });
 
-  const datasets = data?.items ?? MOCK_DATASETS;
+  const datasets = data?.items ?? [];
 
   if (isLoading) {
     return (
@@ -444,8 +444,8 @@ function DatasetsTab({ projectId }: { projectId: string }) {
       <div style={{ borderTop: '1px solid #e8d8c4' }}>
         {datasets.map((ds) => {
           const s = STATUS_COLORS[ds.status] ?? STATUS_COLORS.pending;
-          const temporal = ds.temporal_extent_start
-            ? new Date(ds.temporal_extent_start).getFullYear()
+          const temporal = ds.temporal_extent?.lower
+            ? new Date(ds.temporal_extent.lower).getFullYear()
             : null;
 
           return (
@@ -461,32 +461,13 @@ function DatasetsTab({ projectId }: { projectId: string }) {
                 >
                   {ds.name}
                 </p>
-                {ds.tags.length > 0 && (
-                  <div className="flex gap-1 flex-wrap">
-                    {ds.tags.slice(0, 3).map((tag) => (
-                      <span
-                        key={tag}
-                        style={{
-                          fontSize: '0.625rem',
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          backgroundColor: '#e8d5b8',
-                          color: '#7f5539',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <div
                 className="hidden md:flex items-center gap-6 shrink-0"
                 style={{ fontSize: '0.75rem', color: '#9a8878' }}
               >
-                <span>{ds.item_count.toLocaleString()} items</span>
+                {(ds.metadata?.file_count ?? 0) > 0 && <span>{ds.metadata!.file_count!.toLocaleString()} files</span>}
                 {temporal && <span>{temporal}</span>}
                 <span
                   className="flex items-center gap-1.5"
@@ -911,33 +892,32 @@ const MOCK_MAPS: ProjectMap[] = [
 
 const MOCK_DATASETS: Dataset[] = [
   {
-    id: 'd1', organization_id: 'o1', project_ids: ['p1'],
+    id: 'd1', organization_id: 'o1',
     name: 'Sentinel-2 Amazon Basin 2024', stac_collection_id: 'sentinel-2-l2a',
-    source_uri: 's3://bucket/sentinel', status: 'completed',
-    item_count: 1240, spatial_extent: null,
-    temporal_extent_start: '2024-01-01T00:00:00Z',
-    temporal_extent_end: '2024-03-31T00:00:00Z',
-    tags: ['sentinel-2', 'optical', 'multispectral'],
-    created_at: '2024-01-10T10:00:00Z', updated_at: '2024-03-31T12:00:00Z',
+    dataset_type: 'raster', status: 'ready',
+    geometry: null,
+    temporal_extent: { lower: '2024-01-01T00:00:00Z', upper: '2024-03-31T00:00:00Z', bounds: '[)' },
+    metadata: { file_count: 1240 },
+    description: null, created_by: null,
+    created_at: '2024-01-10T10:00:00Z', updated_at: '2024-03-31T12:00:00Z', deleted_at: null,
   },
   {
-    id: 'd2', organization_id: 'o1', project_ids: ['p1'],
+    id: 'd2', organization_id: 'o1',
     name: 'LIDAR Point Cloud — Sector 4', stac_collection_id: null,
-    source_uri: 's3://bucket/lidar', status: 'completed',
-    item_count: 342, spatial_extent: null,
-    temporal_extent_start: '2024-02-01T00:00:00Z',
-    temporal_extent_end: null,
-    tags: ['lidar', 'point-cloud', '3d'],
-    created_at: '2024-02-05T10:00:00Z', updated_at: '2024-02-20T10:00:00Z',
+    dataset_type: 'raster', status: 'ready',
+    geometry: null,
+    temporal_extent: { lower: '2024-02-01T00:00:00Z', upper: '2024-02-01T00:00:00Z', bounds: '[)' },
+    metadata: { file_count: 342 },
+    description: null, created_by: null,
+    created_at: '2024-02-05T10:00:00Z', updated_at: '2024-02-20T10:00:00Z', deleted_at: null,
   },
   {
-    id: 'd3', organization_id: 'o1', project_ids: ['p1'],
+    id: 'd3', organization_id: 'o1',
     name: 'Field Observation Points — Team Alpha', stac_collection_id: null,
-    source_uri: 's3://bucket/field', status: 'running',
-    item_count: 89, spatial_extent: null,
-    temporal_extent_start: null, temporal_extent_end: null,
-    tags: ['vector', 'field-data'],
-    created_at: '2024-03-10T10:00:00Z', updated_at: '2024-03-13T08:00:00Z',
+    dataset_type: 'vector', status: 'ingesting',
+    geometry: null, temporal_extent: null, metadata: { file_count: 89 },
+    description: null, created_by: null,
+    created_at: '2024-03-10T10:00:00Z', updated_at: '2024-03-13T08:00:00Z', deleted_at: null,
   },
 ];
 

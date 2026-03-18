@@ -16,6 +16,13 @@ interface MapState {
   // Shape type and extra data from the last Geoman pm:create event
   drawnShapeType: DrawTool | null;
   drawnCircleRadius: number | null; // metres, only when drawnShapeType === 'circle'
+  /**
+   * Reactive flag — true once LeafletMap mounts and setMapInstance() is called.
+   * Components that need the L.Map instance (e.g. DatasetFootprintLayer) subscribe
+   * to this so their effects re-run if Leaflet initialises after TileJSON resolves.
+   * NOTE: the actual L.Map object is intentionally NOT stored here — see CLAUDE.md.
+   */
+  mapReady: boolean;
   setCenter: (center: [number, number], zoom?: number) => void;
   setActiveBasemapId: (id: BasemapId) => void;
   setActiveDrawTool: (tool: DrawTool | null) => void;
@@ -34,6 +41,7 @@ export const useMapStore = create<MapState>()(
     drawnGeometry: null,
     drawnShapeType: null,
     drawnCircleRadius: null,
+    mapReady: false,
 
     setCenter: (center, zoom) =>
       set((s) => ({ center, zoom: zoom !== undefined ? zoom : s.zoom })),
@@ -57,6 +65,9 @@ export const useMapStore = create<MapState>()(
 let _mapInstance: L.Map | null = null;
 export function setMapInstance(m: L.Map | null): void {
   _mapInstance = m;
+  // Update the reactive `mapReady` flag so components subscribed to it
+  // re-run their effects when Leaflet initialises (or tears down).
+  useMapStore.setState({ mapReady: !!m });
 }
 export function getMapInstance(): L.Map | null {
   return _mapInstance;

@@ -10,7 +10,7 @@ export const qk = {
   },
 
   maps: {
-    list: (projectId: string) => ['maps', projectId] as const,
+    list: (projectId?: string) => ['maps', projectId] as const,
     detail: (id: string) => ['maps', 'detail', id] as const,
   },
 

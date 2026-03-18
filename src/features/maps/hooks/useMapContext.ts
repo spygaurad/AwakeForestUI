@@ -40,6 +40,11 @@ export function useMapContext(projectId: string, orgId: string) {
         .get(EP.datasets.list, { searchParams: { project_id: projectId, limit: 100 } })
         .json<PaginatedResponse<Dataset>>(),
     enabled: !!projectId && !!orgId,
+    // Poll while any dataset is still ingesting so status stays live
+    refetchInterval: (query) => {
+      const items = query.state.data?.items ?? [];
+      return items.some((d) => d.status === 'ingesting' || d.status === 'pending') ? 5000 : false;
+    },
   });
 
   const { data: annotationsData, isLoading: annotationsLoading, isError: annotationsError } = useQuery({
@@ -78,16 +83,10 @@ export function useMapContext(projectId: string, orgId: string) {
   const isError = datasetsError || annotationsError || trackingError || alertsError;
 
   // ── Store initialization — query data → mapLayersStore ────────────────────
-  // initLayer is idempotent (skips if already exists), so it's safe to call
-  // on every render. Dependency arrays use stable primitives (dataset ids, label
-  // strings) rather than the full array reference to avoid spurious re-runs
-  // when TanStack Query returns a referentially new-but-equal array.
-
-  const datasetIds = datasets.map((d) => d.id).join(',');
-  useEffect(() => {
-    datasets.forEach((d) => initLayer(d.id, 'dataset'));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetIds, initLayer]);
+  // Datasets are NOT auto-initialized here. They enter the layers store only
+  // when the user explicitly "adds to map" via LibraryPanel or DatasetInfoPanel,
+  // or when backend map layers are restored by MapEditorShell on mount.
+  // This ensures the legend only shows layers the user actually added.
 
   const annotationLabels = [...new Set(annotations.map((a) => a.label))].join(',');
   useEffect(() => {

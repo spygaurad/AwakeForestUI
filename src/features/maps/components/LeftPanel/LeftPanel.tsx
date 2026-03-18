@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Layers, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Layers, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { LayerGroupSection } from './LayerGroupSection';
 import { DatasetLayerItem } from './DatasetLayerItem';
 import { AnnotationLayerItem } from './AnnotationLayerItem';
 import { LayerItem } from './LayerItem';
 import type { Dataset, Annotation, TrackedObject, Alert } from '@/types/api';
+import { useMapLayersStore } from '@/stores/mapLayersStore';
 import { MC, MAP_Z } from '../../mapColors';
 import { useIsCompact } from '@/hooks/use-mobile';
 
@@ -18,10 +19,13 @@ export interface LeftPanelProps {
   topOffset: number;
   bottomOffset: number;
   projectId: string;
+  mapId?: string;
   datasets: Dataset[];
   annotations: Annotation[];
   trackedObjects: TrackedObject[];
   alerts: Alert[];
+  onRemoveDataset?: (datasetId: string) => void;
+  onLayerMove?: (layerId: string, direction: 'up' | 'down') => void;
 }
 
 export function LeftPanel({
@@ -33,9 +37,12 @@ export function LeftPanel({
   annotations,
   trackedObjects,
   alerts,
+  onRemoveDataset,
+  onLayerMove,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<PanelTab>('layers');
   const isCompact = useIsCompact();
+  const layers = useMapLayersStore((s) => s.layers);
 
   const annotationsByLabel = annotations.reduce<Record<string, Annotation[]>>((acc, a) => {
     if (!acc[a.label]) acc[a.label] = [];
@@ -48,6 +55,10 @@ export function LeftPanel({
     Object.keys(annotationsByLabel).length +
     trackedObjects.length +
     alerts.length;
+
+  // ── Build a flat, z_index-sorted layer list for the "all layers" view ──
+  const sortedLayerEntries = Object.entries(layers)
+    .sort(([, a], [, b]) => b.zIndex - a.zIndex); // top of stack first
 
   // ── Desktop geometry ────────────────────────────────────────────────────────
   const panelTop = topOffset + 8;
@@ -169,51 +180,150 @@ export function LeftPanel({
         {/* ── LAYERS tab ──────────────────────────────────────── */}
         {tab === 'layers' && (
           <>
-            <LayerGroupSection title="Datasets" count={datasets.length} defaultOpen>
-              {datasets.length === 0 ? (
-                <EmptyHint>No datasets — add from Library</EmptyHint>
-              ) : (
-                datasets.map((d) => <DatasetLayerItem key={d.id} dataset={d} />)
-              )}
-            </LayerGroupSection>
+            {/* Z-index ordered layer stack */}
+            {sortedLayerEntries.length > 0 && (
+              <div style={{ padding: '4px 0' }}>
+                <div style={{
+                  padding: '4px 10px 6px',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: MC.sectionLabel,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <span>Draw order</span>
+                  <span style={{ fontSize: 8, color: MC.textMuted, fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>
+                    top → bottom
+                  </span>
+                </div>
 
-            <LayerGroupSection
-              title="Annotations"
-              count={Object.keys(annotationsByLabel).length}
-              defaultOpen
-            >
-              {Object.keys(annotationsByLabel).length === 0 ? (
-                <EmptyHint>Draw shapes with Annotate tool</EmptyHint>
-              ) : (
-                Object.entries(annotationsByLabel).map(([label, items]) => (
-                  <AnnotationLayerItem key={label} label={label} count={items.length} />
-                ))
-              )}
-            </LayerGroupSection>
+                {sortedLayerEntries.map(([id, layer], idx) => {
+                  const dataset = datasets.find((d) => d.id === id);
+                  const annotationLabel = id.startsWith('annotation-') ? id.replace('annotation-', '') : null;
+                  const isFirst = idx === 0;
+                  const isLast = idx === sortedLayerEntries.length - 1;
 
-            <LayerGroupSection title="Tracking" count={trackedObjects.length} defaultOpen={false}>
-              {trackedObjects.length === 0 ? (
-                <EmptyHint>No tracked objects</EmptyHint>
-              ) : (
-                <LayerItem
-                  id="tracking-all"
-                  name={`${trackedObjects.length} tracked object${trackedObjects.length !== 1 ? 's' : ''}`}
-                  type="tracking"
-                />
-              )}
-            </LayerGroupSection>
+                  return (
+                    <div key={id} style={{ display: 'flex', alignItems: 'flex-start' }}>
+                      {/* Reorder controls */}
+                      {onLayerMove && sortedLayerEntries.length > 1 && (
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 1,
+                          padding: '4px 0 0 6px',
+                          flexShrink: 0,
+                        }}>
+                          <button
+                            onClick={() => onLayerMove(id, 'up')}
+                            disabled={isFirst}
+                            title="Move up (higher draw order)"
+                            style={{
+                              width: 16, height: 14,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: 'transparent', border: 'none',
+                              color: isFirst ? MC.borderLight : MC.textMuted,
+                              cursor: isFirst ? 'default' : 'pointer',
+                              borderRadius: 2,
+                              padding: 0,
+                            }}
+                          >
+                            <ChevronUp size={10} />
+                          </button>
+                          <button
+                            onClick={() => onLayerMove(id, 'down')}
+                            disabled={isLast}
+                            title="Move down (lower draw order)"
+                            style={{
+                              width: 16, height: 14,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: 'transparent', border: 'none',
+                              color: isLast ? MC.borderLight : MC.textMuted,
+                              cursor: isLast ? 'default' : 'pointer',
+                              borderRadius: 2,
+                              padding: 0,
+                            }}
+                          >
+                            <ChevronDown size={10} />
+                          </button>
+                        </div>
+                      )}
 
-            <LayerGroupSection title="Alerts" count={alerts.length} defaultOpen={false}>
-              {alerts.length === 0 ? (
-                <EmptyHint>No active alerts</EmptyHint>
-              ) : (
-                <LayerItem
-                  id="alerts-all"
-                  name={`${alerts.length} alert${alerts.length !== 1 ? 's' : ''}`}
-                  type="alert"
-                />
-              )}
-            </LayerGroupSection>
+                      {/* Layer content */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {dataset ? (
+                          <DatasetLayerItem
+                            dataset={dataset}
+                            onRemove={onRemoveDataset ? () => onRemoveDataset(dataset.id) : undefined}
+                          />
+                        ) : annotationLabel ? (
+                          <AnnotationLayerItem
+                            label={annotationLabel}
+                            count={annotationsByLabel[annotationLabel]?.length ?? 0}
+                          />
+                        ) : id === 'tracking-all' ? (
+                          <LayerItem
+                            id="tracking-all"
+                            name={`${trackedObjects.length} tracked object${trackedObjects.length !== 1 ? 's' : ''}`}
+                            type="tracking"
+                          />
+                        ) : id === 'alerts-all' ? (
+                          <LayerItem
+                            id="alerts-all"
+                            name={`${alerts.length} alert${alerts.length !== 1 ? 's' : ''}`}
+                            type="alert"
+                          />
+                        ) : (
+                          <LayerItem
+                            id={id}
+                            name={layer.tileServiceUrl ? 'Tile Service' : id}
+                            type={layer.type}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {sortedLayerEntries.length === 0 && (
+              <div style={{
+                padding: '32px 20px',
+                textAlign: 'center',
+              }}>
+                <Layers size={28} style={{ color: MC.borderLight, margin: '0 auto 12px' }} />
+                <div style={{ fontSize: 13, fontWeight: 600, color: MC.textSecondary, marginBottom: 6 }}>
+                  No layers yet
+                </div>
+                <div style={{ fontSize: 12, color: MC.textMuted, lineHeight: 1.5 }}>
+                  Open the Library to add datasets, or use the Annotate tools to draw on the map.
+                </div>
+              </div>
+            )}
+
+            {/* Grouped sections (legacy view — shown below z-ordered list) */}
+            {sortedLayerEntries.length === 0 && (
+              <>
+                <LayerGroupSection title="Datasets" count={datasets.length} defaultOpen>
+                  {datasets.length === 0 ? (
+                    <EmptyHint>No datasets — add from Library</EmptyHint>
+                  ) : (
+                    datasets.map((d) => (
+                      <DatasetLayerItem
+                        key={d.id}
+                        dataset={d}
+                        onRemove={onRemoveDataset ? () => onRemoveDataset(d.id) : undefined}
+                      />
+                    ))
+                  )}
+                </LayerGroupSection>
+              </>
+            )}
           </>
         )}
 
@@ -231,7 +341,7 @@ export function LeftPanel({
             {datasets.length > 0 && (
               <LegendSection title="Datasets">
                 {datasets.map((d) => (
-                  <LegendRow key={d.id} color={MC.info} label={d.name} count={d.item_count} shape="square" />
+                  <LegendRow key={d.id} color={MC.info} label={d.name} count={d.metadata?.file_count ?? 0} shape="square" />
                 ))}
               </LegendSection>
             )}
@@ -263,7 +373,7 @@ export function LeftPanel({
   if (isCompact) {
     return (
       <>
-        {/* Backdrop — tapping outside closes the sheet */}
+        {/* Backdrop */}
         {open && (
           <div
             onClick={onToggle}
@@ -296,14 +406,13 @@ export function LeftPanel({
             transform: open ? 'translateY(0)' : 'translateY(110%)',
             transition: 'transform 0.25s cubic-bezier(0.2,0,0,1)',
             overflow: 'hidden',
-            // Safe-area padding for devices with home indicator
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           }}
         >
           {panelContent}
         </div>
 
-        {/* FAB trigger — shown when sheet is closed */}
+        {/* FAB trigger */}
         {!open && (
           <button
             onClick={onToggle}
@@ -362,7 +471,7 @@ export function LeftPanel({
           position: 'absolute',
           top: panelTop,
           left: 8,
-          width: 260,
+          width: 280,
           maxHeight: maxPanelH,
           zIndex: MAP_Z.panel,
           display: 'flex',
@@ -371,7 +480,7 @@ export function LeftPanel({
           border: `1px solid ${MC.panelBorder}`,
           borderRadius: 8,
           boxShadow: open ? MC.shadowMd : 'none',
-          transform: open ? 'translateX(0)' : 'translateX(-276px)',
+          transform: open ? 'translateX(0)' : 'translateX(-296px)',
           transition: 'transform 0.22s cubic-bezier(0.2,0,0,1)',
           overflow: 'hidden',
         }}

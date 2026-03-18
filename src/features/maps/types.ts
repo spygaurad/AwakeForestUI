@@ -1,5 +1,8 @@
 export type LayerType = 'dataset' | 'annotation' | 'tracking' | 'alert';
 
+/** Source types matching the backend API (ui-leaflet-integration-guide §11) */
+export type LayerSourceType = 'dataset' | 'stac_item' | 'tile_service';
+
 export interface LayerStyle {
   color: string;
   fillColor: string;
@@ -41,12 +44,34 @@ export const DEFAULT_DATASET_STYLE: LayerStyle = {
   radius: 6,
 };
 
+export const DEFAULT_TILE_SERVICE_STYLE: LayerStyle = {
+  color: '#8a7eb8',
+  fillColor: '#8a7eb8',
+  fillOpacity: 0.1,
+  weight: 1,
+  radius: 6,
+};
+
 export interface LayerConfig {
   id: string;
   type: LayerType;
+  sourceType?: LayerSourceType;
   visible: boolean;
   opacity: number;
   style: LayerStyle;
+  /** z_index for layer ordering (0 = bottom). Synced with backend. */
+  zIndex: number;
+  /** Populated after TileJSON fetch — enables COG tile rendering via L.tileLayer */
+  tileUrl?: string;
+  tileBounds?: [number, number, number, number]; // [west, south, east, north]
+  tileMinZoom?: number;
+  tileMaxZoom?: number;
+  /** For tile_service layers — the raw URL template */
+  tileServiceUrl?: string;
+  /** For stac_item layers — which dataset this item belongs to */
+  parentDatasetId?: string;
+  /** For stac_item layers — the STAC item ID */
+  stacItemId?: string;
 }
 
 export interface SelectedFeature {
@@ -62,7 +87,9 @@ export interface SelectedFeature {
 
 // 'new-annotation' = user just drew a shape via Geoman, right panel shows attribute form
 // 'measurement'    = measurement tool is active, right panel shows live segment data
-export type RightPanelMode = 'none' | 'feature' | 'style' | 'new-annotation' | 'measurement';
+// 'dataset'        = dataset layer row clicked, shows metadata + tile controls
+// 'items'          = browsing individual STAC items within a dataset
+export type RightPanelMode = 'none' | 'feature' | 'style' | 'new-annotation' | 'measurement' | 'dataset' | 'items';
 
 export interface PendingAnnotation {
   label: string;

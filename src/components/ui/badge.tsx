@@ -32,9 +32,11 @@ function Badge({
   variant = "default",
   asChild = false,
   ...props
-}: React.ComponentProps<"span"> &
+}: React.HTMLAttributes<HTMLSpanElement> & // Use HTMLAttributes instead of ComponentProps
   VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "span"
+  
+  // Cast the assignment to prevent the RefAttributes mismatch
+  const Comp = (asChild ? Slot : "span") as React.ElementType
 
   return (
     <Comp

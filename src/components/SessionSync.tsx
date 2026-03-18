@@ -1,64 +1,75 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuth, useOrganizationList } from '@clerk/nextjs';
 import { registerTokenGetter } from '@/lib/api/client';
 
 /**
  * Mounted inside the (app) layout on every authenticated page.
  *
- * Does two things:
- *
- * 1. Ensures an org session is active in the Clerk JWT.
- *    Without an explicit `setActive` call, Clerk issues a JWT with no `org_id`
- *    and no `org_role`. The backend reads these exclusively from the JWT — there
- *    is no `?org_id=` param fallback. Missing org claims cause:
- *      - GET endpoints  → 400 "No active organization in JWT"
- *      - POST endpoints → 403 "Insufficient permissions" (org_role defaults to
- *                         "org:viewer" rank 0, failing the org:member check)
- *
- *    This effect auto-activates the first available org membership when the JWT
- *    has no org claims. This covers:
- *      - Returning users who navigate directly without going through /select-org
- *      - Edge cases where the session cookie has an org but the in-memory JWT
- *        was issued before setActive was called in this browser session
- *
+ * 1. Registers Clerk's getToken with the API client.
  * 2. Calls POST /api/auth/sync to upsert the user + org in the backend DB.
- *    Only fires once an org session is confirmed active (orgId present in JWT).
+ * 3. Renders <OrgAutoActivate> only when orgId is absent — that child component
+ *    calls useOrganizationList, which triggers Clerk's membership polling. Once
+ *    an org is activated (orgId present), the child unmounts and polling stops.
+ *
+ * Clerk v2 JWTs encode org info as "o": {"id": "org_xxx", "rol": "admin"}.
+ * The SDK surfaces this as orgId/orgRole. When absent the backend returns:
+ *   - GET  → 400 "No active organization in JWT"
+ *   - POST → 403 (role defaults to rank 0, failing org:member check)
  */
 export function SessionSync() {
   const { isLoaded, isSignedIn, orgId, getToken } = useAuth();
-  const {
-    isLoaded: listLoaded,
-    userMemberships,
-    setActive,
-  } = useOrganizationList({ userMemberships: { infinite: false } });
 
-  // Register Clerk's getToken so apiClient always gets a fresh org-scoped JWT
+  // Keep a stable ref to getToken so that Clerk's 30–60 s token refreshes
+  // (which produce a new function reference) don't re-trigger the effect
+  // and bust the token cache unnecessarily.
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  // Register Clerk's getToken so apiClient always gets a fresh org-scoped JWT.
+  // Re-register only when orgId changes (org switch) — the ref indirection
+  // means token refreshes are transparent; the cached wrapper always calls
+  // the latest getToken without busting client.ts's 30 s token cache.
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      registerTokenGetter(getToken);
+      registerTokenGetter(() => getTokenRef.current());
     }
-  }, [isLoaded, isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, orgId]);
 
-  // Effect 1 — ensure org session is active in the JWT
-  useEffect(() => {
-    if (!isLoaded || !listLoaded || !isSignedIn) return;
-    if (orgId) return; // JWT already carries org_id — nothing to do
-
-    const memberships = userMemberships?.data ?? [];
-    if (memberships.length === 0 || !setActive) return;
-
-    // Calling setActive causes Clerk to issue a new JWT with org_id + org_role.
-    // All subsequent apiClient calls will carry correct org claims.
-    setActive({ organization: memberships[0].organization.id });
-  }, [isLoaded, listLoaded, isSignedIn, orgId, userMemberships, setActive]);
-
-  // Effect 2 — sync user/org to the backend once org session is confirmed
+  // Sync user/org to the backend once org session is confirmed
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !orgId) return;
     fetch('/api/auth/sync', { method: 'POST' }).catch(console.error);
   }, [isLoaded, isSignedIn, orgId]);
+
+  // Only mount the org-list poller when there's no active org in the JWT.
+  // This avoids Clerk's useOrganizationList polling for the entire session.
+  if (isLoaded && isSignedIn && !orgId) {
+    return <OrgAutoActivate />;
+  }
+
+  return null;
+}
+
+/**
+ * Calls useOrganizationList to auto-activate the first org membership.
+ * Rendered only when orgId is absent — unmounts as soon as setActive succeeds
+ * and Clerk reissues a JWT with org claims, stopping all membership polling.
+ */
+function OrgAutoActivate() {
+  const { isLoaded: listLoaded, userMemberships, setActive } = useOrganizationList({
+    userMemberships: { infinite: false },
+  });
+
+  useEffect(() => {
+    if (!listLoaded || !setActive) return;
+    const memberships = userMemberships?.data ?? [];
+    if (memberships.length === 0) return;
+    setActive({ organization: memberships[0].organization.id });
+  }, [listLoaded, userMemberships, setActive]);
 
   return null;
 }

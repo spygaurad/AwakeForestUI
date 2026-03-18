@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import type { LayerConfig, LayerStyle, SelectedFeature, RightPanelMode, LayerType, PendingAnnotation } from '@/features/maps/types';
+import type {
+  LayerConfig,
+  LayerStyle,
+  LayerSourceType,
+  SelectedFeature,
+  RightPanelMode,
+  LayerType,
+  PendingAnnotation,
+} from '@/features/maps/types';
 
 // ── Feature-click tracking (module-level) ──────────────────────────────────────
 // Used by map click handler to distinguish empty-map clicks from feature clicks.
@@ -12,6 +20,7 @@ import {
   DEFAULT_DATASET_STYLE,
   DEFAULT_TRACKING_STYLE,
   DEFAULT_ALERT_STYLE,
+  DEFAULT_TILE_SERVICE_STYLE,
 } from '@/features/maps/types';
 
 const DEFAULT_STYLES: Record<LayerType, LayerStyle> = {
@@ -20,6 +29,9 @@ const DEFAULT_STYLES: Record<LayerType, LayerStyle> = {
   tracking: DEFAULT_TRACKING_STYLE,
   alert: DEFAULT_ALERT_STYLE,
 };
+
+/** Next z_index — incremented each time a layer is added. */
+let _nextZIndex = 0;
 
 interface MapLayersState {
   layers: Record<string, LayerConfig>; // keyed by id
@@ -39,12 +51,45 @@ interface MapLayersState {
   removePendingAnnotationAttribute: (idx: number) => void;
   clearPendingAnnotation: () => void;
 
+  // Maps dataset id → backend map layer id (for PATCH/DELETE persistence)
+  backendLayerIds: Record<string, string>;
+  setBackendLayerId: (datasetId: string, layerId: string) => void;
+
+  // Auto-save dirty tracking — true when opacity/style changed since last flush
+  autoSaveDirty: boolean;
+  markAutoSaveDirty: () => void;
+  clearAutoSaveDirty: () => void;
+
   // layer config actions
-  initLayer: (id: string, type: LayerType) => void;
+  initLayer: (id: string, type: LayerType, opts?: {
+    sourceType?: LayerSourceType;
+    zIndex?: number;
+    tileServiceUrl?: string;
+    parentDatasetId?: string;
+    stacItemId?: string;
+  }) => void;
+  removeLayer: (id: string) => void;
   setLayerVisible: (id: string, visible: boolean) => void;
   setLayerOpacity: (id: string, opacity: number) => void;
   setLayerStyle: (id: string, patch: Partial<LayerStyle>) => void;
+  setLayerTileConfig: (
+    id: string,
+    config: { tileUrl: string; tileBounds?: [number, number, number, number]; tileMinZoom?: number; tileMaxZoom?: number }
+  ) => void;
   getLayer: (id: string) => LayerConfig | undefined;
+
+  /** Set z_index values after a reorder operation. Keyed by layer id → new z_index. */
+  applyReorder: (newOrder: Record<string, number>) => void;
+  /** Move a layer up (+1) or down (-1) in z_index. Returns the two swapped layer IDs. */
+  moveLayer: (id: string, direction: 'up' | 'down') => [string, string] | null;
+
+  // dataset panel
+  selectedDatasetId: string | null;
+  openDatasetPanel: (datasetId: string) => void;
+
+  // items panel (browse STAC items within a dataset)
+  selectedItemsDatasetId: string | null;
+  openItemsPanel: (datasetId: string) => void;
 
   // right panel
   openFeaturePanel: (feature: SelectedFeature) => void;
@@ -63,22 +108,56 @@ interface MapLayersState {
 export const useMapLayersStore = create<MapLayersState>()(
   subscribeWithSelector((set, get) => ({
     layers: {},
+    backendLayerIds: {},
     rightPanelMode: 'none',
     selectedLayerId: null,
     selectedFeature: null,
+    selectedDatasetId: null,
+    selectedItemsDatasetId: null,
     measurementActive: false,
     measurementPoints: [],
     pendingAnnotation: null,
+    autoSaveDirty: false,
 
-    initLayer: (id, type) =>
+    setBackendLayerId: (datasetId, layerId) =>
+      set((s) => ({ backendLayerIds: { ...s.backendLayerIds, [datasetId]: layerId } })),
+
+    markAutoSaveDirty: () => set({ autoSaveDirty: true }),
+    clearAutoSaveDirty: () => set({ autoSaveDirty: false }),
+
+    initLayer: (id, type, opts) =>
       set((s) => {
         if (s.layers[id]) return s;
+        const zIndex = opts?.zIndex ?? _nextZIndex++;
+        const style = type === 'dataset' && opts?.sourceType === 'tile_service'
+          ? { ...DEFAULT_TILE_SERVICE_STYLE }
+          : { ...DEFAULT_STYLES[type] };
         return {
           layers: {
             ...s.layers,
-            [id]: { id, type, visible: true, opacity: 1, style: { ...DEFAULT_STYLES[type] } },
+            [id]: {
+              id,
+              type,
+              sourceType: opts?.sourceType,
+              visible: true,
+              opacity: 1,
+              style,
+              zIndex,
+              tileServiceUrl: opts?.tileServiceUrl,
+              parentDatasetId: opts?.parentDatasetId,
+              stacItemId: opts?.stacItemId,
+            },
           },
         };
+      }),
+
+    removeLayer: (id) =>
+      set((s) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { [id]: _removedLayer, ...layers } = s.layers;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { [id]: _removedBackend, ...backendLayerIds } = s.backendLayerIds;
+        return { layers, backendLayerIds };
       }),
 
     setLayerVisible: (id, visible) =>
@@ -89,6 +168,7 @@ export const useMapLayersStore = create<MapLayersState>()(
     setLayerOpacity: (id, opacity) =>
       set((s) => ({
         layers: { ...s.layers, [id]: { ...s.layers[id], opacity } },
+        autoSaveDirty: true,
       })),
 
     setLayerStyle: (id, patch) =>
@@ -97,9 +177,70 @@ export const useMapLayersStore = create<MapLayersState>()(
           ...s.layers,
           [id]: { ...s.layers[id], style: { ...s.layers[id]?.style, ...patch } },
         },
+        autoSaveDirty: true,
+      })),
+
+    setLayerTileConfig: (id, config) =>
+      set((s) => ({
+        layers: {
+          ...s.layers,
+          [id]: { ...s.layers[id], ...config },
+        },
       })),
 
     getLayer: (id) => get().layers[id],
+
+    applyReorder: (newOrder) =>
+      set((s) => {
+        const layers = { ...s.layers };
+        for (const [id, zIndex] of Object.entries(newOrder)) {
+          if (layers[id]) {
+            layers[id] = { ...layers[id], zIndex };
+          }
+        }
+        return { layers };
+      }),
+
+    moveLayer: (id, direction) => {
+      const state = get();
+      const layer = state.layers[id];
+      if (!layer) return null;
+
+      const targetZ = direction === 'up' ? layer.zIndex + 1 : layer.zIndex - 1;
+      if (targetZ < 0) return null;
+
+      // Find the layer currently at the target z_index
+      const swapEntry = Object.entries(state.layers).find(
+        ([, l]) => l.zIndex === targetZ
+      );
+
+      const newOrder: Record<string, number> = { [id]: targetZ };
+      let swapId = id;
+
+      if (swapEntry) {
+        const [otherId] = swapEntry;
+        newOrder[otherId] = layer.zIndex;
+        swapId = otherId;
+      }
+
+      set((s) => {
+        const layers = { ...s.layers };
+        for (const [lid, zIndex] of Object.entries(newOrder)) {
+          if (layers[lid]) {
+            layers[lid] = { ...layers[lid], zIndex };
+          }
+        }
+        return { layers };
+      });
+
+      return [id, swapId];
+    },
+
+    openDatasetPanel: (datasetId) =>
+      set({ rightPanelMode: 'dataset', selectedDatasetId: datasetId, selectedFeature: null, selectedLayerId: null }),
+
+    openItemsPanel: (datasetId) =>
+      set({ rightPanelMode: 'items', selectedItemsDatasetId: datasetId, selectedFeature: null, selectedLayerId: null }),
 
     openAnnotationPanel: () =>
       set({
@@ -180,7 +321,7 @@ export const useMapLayersStore = create<MapLayersState>()(
       set((s) => s.pendingAnnotation ? { rightPanelMode: 'new-annotation' } : s),
 
     closeRightPanel: () =>
-      set({ rightPanelMode: 'none', selectedLayerId: null, selectedFeature: null }),
+      set({ rightPanelMode: 'none', selectedLayerId: null, selectedFeature: null, selectedDatasetId: null, selectedItemsDatasetId: null }),
 
     toggleMeasurement: () =>
       set((s) => {

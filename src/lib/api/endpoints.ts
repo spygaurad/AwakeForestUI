@@ -3,7 +3,7 @@
  *
  * Base URL is configured in src/lib/api/client.ts via NEXT_PUBLIC_API_URL.
  * These paths are relative to that base and map 1-to-1 with the backend routes
- * documented in docs/backend-api-endpoints.md.
+ * documented in docs/api-endpoints.md.
  *
  * Usage:
  *   import { EP } from '@/lib/api/endpoints';
@@ -29,19 +29,23 @@ export const EP = {
     update: (id: string) => `projects/${id}`,
     delete: (id: string) => `projects/${id}`,
     members: (id: string) => `projects/${id}/members`,
+    datasets: (id: string) => `projects/${id}/datasets`,
   },
 
   maps: {
-    list: (projectId: string) => `projects/${projectId}/maps`,
-    create: (projectId: string) => `projects/${projectId}/maps`,
+    list: 'maps',
+    create: 'maps',
     detail: (id: string) => `maps/${id}`,
     update: (id: string) => `maps/${id}`,
     delete: (id: string) => `maps/${id}`,
+    layers: (mapId: string) => `maps/${mapId}/layers`,
+    layerDetail: (mapId: string, layerId: string) => `maps/${mapId}/layers/${layerId}`,
+    layersReorder: (mapId: string) => `maps/${mapId}/layers/reorder`,
   },
 
   jobs: {
-    /** Only GET /jobs/{id} is documented. Use jobStore for client-side job tracking. */
     detail: (id: string) => `jobs/${id}`,
+    retry: (id: string) => `jobs/${id}/retry`,
   },
 
   apiKeys: {
@@ -52,30 +56,41 @@ export const EP = {
 
   datasets: {
     list: 'datasets',
-    footprints: 'datasets/footprints',
+    create: 'datasets',
     detail: (id: string) => `datasets/${id}`,
     update: (id: string) => `datasets/${id}`,
+    delete: (id: string) => `datasets/${id}`,
     items: (id: string) => `datasets/${id}/items`,
+    itemTileConfig: (datasetId: string, itemId: string) =>
+      `datasets/${datasetId}/items/${itemId}/tile-config`,
     downloadUrl: (id: string) => `datasets/${id}/download-url`,
-    tileConfig: (id: string) => `datasets/${id}/tile-config`,
-    ingest: (id: string) => `datasets/${id}/ingest`,
-    // Multipart upload flow (steps 1–4 before calling ingest)
-    uploadInitiate: 'datasets/upload/initiate',
-    uploadPartUrl: (datasetId: string, uploadId: string) =>
-      `datasets/upload/${datasetId}/part-url/${uploadId}`,
+    tileJson: (id: string) => `datasets/${id}/tilejson`,
+    // Multipart upload flow — correct nested paths per API docs:
+    //   Step 1: POST /datasets              → create metadata record → dataset_id
+    //   Step 2: POST /datasets/{id}/uploads/initiate → start multipart upload
+    //   Step 3: PUT <presigned_url>          → upload parts directly to MinIO
+    //   Step 4: POST /datasets/{id}/uploads/{uid}/part-urls → more parts if needed
+    //   Step 5: POST /datasets/{id}/uploads/{uid}/complete → finalize + enqueue ingestion
+    //   Abort:  DELETE /datasets/{id}/uploads/{uid}
+    uploadInitiate: (datasetId: string) =>
+      `datasets/${datasetId}/uploads/initiate`,
+    /** Fetch presigned S3 PUT URLs for parts beyond the initial batch. */
+    uploadPartUrls: (datasetId: string, uploadId: string) =>
+      `datasets/${datasetId}/uploads/${uploadId}/part-urls`,
+    /** Proxy PUT — browser → API → MinIO (no presigned URL needed). */
+    uploadPartProxy: (datasetId: string, uploadId: string, partNumber: number) =>
+      `datasets/${datasetId}/uploads/${uploadId}/parts/${partNumber}`,
     uploadComplete: (datasetId: string, uploadId: string) =>
-      `datasets/upload/${datasetId}/complete/${uploadId}`,
+      `datasets/${datasetId}/uploads/${uploadId}/complete`,
     uploadAbort: (datasetId: string, uploadId: string) =>
-      `datasets/upload/${datasetId}/abort/${uploadId}`,
+      `datasets/${datasetId}/uploads/${uploadId}`,
   },
 
-  collections: {
-    list: 'collections',
-    detail: (id: string) => `collections/${id}`,
-    items: (id: string) => `collections/${id}/items`,
+  stac: {
+    search: 'stac/search',
+    collections: 'stac/collections',
+    collectionItems: (id: string) => `stac/collections/${id}/items`,
   },
-
-  search: 'search',
 
   annotations: {
     list: 'annotations',

@@ -28,12 +28,39 @@ export interface Project {
 }
 
 // --- Maps (work units inside a project) ---
+export interface MapViewState {
+  center: [number, number]; // [lng, lat]
+  zoom: number;
+  bearing?: number;
+  pitch?: number;
+}
+
+/** Layer as returned by GET /maps/{id} → layers[] */
+export interface MapApiLayer {
+  id: string;
+  name: string;
+  layer_type: string;
+  source_type: 'dataset' | 'stac_item' | 'tile_service';
+  dataset_id: string | null;
+  stac_item_id: string | null;
+  tile_service_url: string | null;
+  z_index: number;
+  visible: boolean;
+  opacity: number;
+  style_override: Record<string, unknown> | null;
+}
+
 export interface ProjectMap {
   id: string;
   project_id: string;
   organization_id: string;
   name: string;
   description: string | null;
+  /** Present on GET /maps/{id} detail response. Absent in list responses. */
+  view_state?: MapViewState | null;
+  /** Fully populated on GET /maps/{id}. Absent in list responses. */
+  layers?: MapApiLayer[];
+  base_style?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -47,24 +74,40 @@ export interface ProjectMember {
 }
 
 // --- Datasets ---
-export type DatasetStatus = 'pending' | 'running' | 'completed' | 'failed';
+/** Actual status values returned by the API. */
+export type DatasetStatus = 'pending' | 'ingesting' | 'ready' | 'failed';
+
+export interface DatasetTemporalExtent {
+  lower: string;
+  upper: string;
+  bounds: string;
+}
+
+export interface DatasetMetadata {
+  gsd_max?: number;
+  gsd_min?: number;
+  band_count?: string[];
+  file_count?: number;
+  native_crs?: string[];
+  total_size_bytes?: number;
+}
 
 export interface Dataset {
   id: string;
   organization_id: string;
-  /** All projects this dataset is linked to (junction table). Use project_id filter on list endpoint to scope. */
-  project_ids: string[];
   name: string;
-  stac_collection_id: string | null;
-  source_uri: string;
+  description: string | null;
+  dataset_type: 'raster' | 'vector';
   status: DatasetStatus;
-  item_count: number;
-  spatial_extent: GeoJSONGeometry | null;
-  temporal_extent_start: string | null;
-  temporal_extent_end: string | null;
-  tags: string[];
+  stac_collection_id: string | null;
+  /** Spatial footprint of the dataset — same field that was previously `spatial_extent`. */
+  geometry: GeoJSONGeometry | null;
+  temporal_extent: DatasetTemporalExtent | null;
+  metadata: DatasetMetadata | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface DatasetItem {

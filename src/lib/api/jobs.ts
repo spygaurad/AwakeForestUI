@@ -10,4 +10,11 @@ export const jobsApi = {
    */
   get: (id: string) =>
     apiClient.get(EP.jobs.detail(id)).json<Job>(),
+
+  /**
+   * POST /jobs/{job_id}/retry — re-enqueue a failed ingest job without re-uploading.
+   * Only applicable to jobs with status = 'failed'. Returns HTTP 202.
+   */
+  retry: (id: string) =>
+    apiClient.post(EP.jobs.retry(id), {}).json<{ job_id: string }>(),
 };

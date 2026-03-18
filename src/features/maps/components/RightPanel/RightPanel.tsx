@@ -6,6 +6,8 @@ import { FeaturePropertiesPanel } from './FeaturePropertiesPanel';
 import { LayerStylePanel } from './LayerStylePanel';
 import { NewAnnotationPanel } from './NewAnnotationPanel';
 import { MeasurementPanel } from './MeasurementPanel';
+import { DatasetInfoPanel } from './DatasetInfoPanel';
+import { DatasetItemsPanel } from './DatasetItemsPanel';
 import { MC, MAP_Z } from '../../mapColors';
 import { useIsCompact } from '@/hooks/use-mobile';
 
@@ -14,17 +16,23 @@ const PANEL_TITLES: Record<string, string> = {
   style: 'Layer Style',
   'new-annotation': 'Annotation Attributes',
   measurement: 'Distance Measurement',
+  dataset: 'Dataset',
+  items: 'Dataset Items',
 };
 
 interface RightPanelProps {
   topOffset: number;
   bottomOffset: number;
+  mapId?: string;
+  projectId?: string;
 }
 
-export function RightPanel({ topOffset, bottomOffset }: RightPanelProps) {
+export function RightPanel({ topOffset, bottomOffset, mapId, projectId }: RightPanelProps) {
   const rightPanelMode = useMapLayersStore((s) => s.rightPanelMode);
   const selectedFeature = useMapLayersStore((s) => s.selectedFeature);
   const selectedLayerId = useMapLayersStore((s) => s.selectedLayerId);
+  const selectedDatasetId = useMapLayersStore((s) => s.selectedDatasetId);
+  const selectedItemsDatasetId = useMapLayersStore((s) => s.selectedItemsDatasetId);
   const closeRightPanel = useMapLayersStore((s) => s.closeRightPanel);
   const clearMeasurement = useMapLayersStore((s) => s.clearMeasurement);
   const layers = useMapLayersStore((s) => s.layers);
@@ -106,6 +114,12 @@ export function RightPanel({ topOffset, bottomOffset }: RightPanelProps) {
             layerType={layers[selectedLayerId]?.type ?? 'annotation'}
           />
         )}
+        {rightPanelMode === 'dataset' && selectedDatasetId && (
+          <DatasetInfoPanel datasetId={selectedDatasetId} mapId={mapId} />
+        )}
+        {rightPanelMode === 'items' && selectedItemsDatasetId && (
+          <DatasetItemsPanel datasetId={selectedItemsDatasetId} mapId={mapId} />
+        )}
       </div>
     </>
   );
@@ -114,7 +128,7 @@ export function RightPanel({ topOffset, bottomOffset }: RightPanelProps) {
   if (isCompact) {
     return (
       <>
-        {/* Backdrop — tapping outside closes the sheet */}
+        {/* Backdrop */}
         {isOpen && (
           <div
             onClick={handleClose}
@@ -147,7 +161,6 @@ export function RightPanel({ topOffset, bottomOffset }: RightPanelProps) {
             transform: isOpen ? 'translateY(0)' : 'translateY(110%)',
             transition: 'transform 0.25s cubic-bezier(0.2,0,0,1)',
             overflow: 'hidden',
-            // Safe-area padding for devices with home indicator
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           }}
         >
@@ -164,7 +177,7 @@ export function RightPanel({ topOffset, bottomOffset }: RightPanelProps) {
         position: 'absolute',
         top: panelTop,
         right: 8,
-        width: 300,
+        width: 320,
         maxHeight: maxPanelH,
         zIndex: MAP_Z.panel,
         background: MC.panelBg,
@@ -173,7 +186,7 @@ export function RightPanel({ topOffset, bottomOffset }: RightPanelProps) {
         boxShadow: isOpen ? MC.shadowMd : 'none',
         display: 'flex',
         flexDirection: 'column',
-        transform: isOpen ? 'translateX(0)' : 'translateX(316px)',
+        transform: isOpen ? 'translateX(0)' : 'translateX(336px)',
         transition: 'transform 0.22s cubic-bezier(0.2,0,0,1)',
         overflow: 'hidden',
       }}

@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { SessionSync } from '@/components/SessionSync';
 
 export default async function AppLayout({
   children,
@@ -8,5 +9,10 @@ export default async function AppLayout({
 }) {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
-  return <>{children}</>;
+  return (
+    <>
+      <SessionSync />
+      {children}
+    </>
+  );
 }
