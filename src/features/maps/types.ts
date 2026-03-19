@@ -1,7 +1,7 @@
 export type LayerType = 'dataset' | 'annotation' | 'tracking' | 'alert';
 
 /** Source types matching the backend API (ui-leaflet-integration-guide §11) */
-export type LayerSourceType = 'dataset' | 'stac_item' | 'tile_service';
+export type LayerSourceType = 'dataset' | 'stac_item' | 'tile_service' | 'annotation_set';
 
 export interface LayerStyle {
   color: string;
@@ -74,6 +74,10 @@ export interface LayerConfig {
   parentDatasetId?: string;
   /** For stac_item layers — the STAC item ID */
   stacItemId?: string;
+  /** For annotation_set layers — the backend annotation set ID */
+  annotationSetId?: string;
+  /** Per-class styles for annotation_set layers. Keyed by class_id. */
+  classStyles?: Record<string, { fillColor: string; strokeColor: string; strokeWidth: number; fillOpacity: number }>;
   /** Spatial bounds [west, south, east, north] — enables zoom-to-layer */
   bounds?: [number, number, number, number] | null;
 }
@@ -93,11 +97,15 @@ export interface SelectedFeature {
 // 'measurement'    = measurement tool is active, right panel shows live segment data
 // 'dataset'        = dataset layer row clicked, shows metadata + tile controls
 // 'items'          = browsing individual STAC items within a dataset
-export type RightPanelMode = 'none' | 'feature' | 'style' | 'new-annotation' | 'measurement' | 'dataset' | 'items';
+export type RightPanelMode = 'none' | 'feature' | 'style' | 'new-annotation' | 'measurement' | 'dataset' | 'items' | 'annotation-set';
 
 export interface PendingAnnotation {
   label: string;
   description: string;
   style: LayerStyle;
   attributes: { key: string; value: string }[];
+  /** If set, the annotation will be saved to this annotation set */
+  annotationSetId?: string;
+  /** The class within the annotation set's schema */
+  classId?: string;
 }

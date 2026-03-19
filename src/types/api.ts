@@ -127,7 +127,74 @@ export type DatasetRelationshipType =
   | 'same_area_different_sensor'
   | 'temporal_continuation';
 
-// --- Annotations ---
+// --- Annotation Schemas & Classes ---
+
+/** Persistent style definition from the backend Style table. */
+export interface StyleDefinition {
+  id: string;
+  name: string;
+  type: string;
+  definition: {
+    fillColor: string;
+    strokeColor: string;
+    strokeWidth: number;
+    fillOpacity: number;
+    [key: string]: unknown;
+  };
+}
+
+export interface AnnotationSchema {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  version: number;
+  geometry_types: string[];      // ['Point', 'Polygon', ...]
+  properties_schema: Record<string, unknown> | null;
+  classes: AnnotationClass[];
+  created_at: string;
+}
+
+export interface AnnotationClass {
+  id: string;
+  schema_id: string;
+  parent_id: string | null;
+  name: string;
+  path: string | null;           // ltree: "species.Bird.Sparrow"
+  style: StyleDefinition | null; // embedded from Style table
+  properties: Record<string, unknown> | null;
+}
+
+// --- Annotation Sets ---
+
+export interface AnnotationSet {
+  id: string;
+  map_id: string;
+  schema_id: string | null;
+  dataset_id: string | null;
+  name: string;
+  description: string | null;
+  created_by_user_id: string | null;
+  created_by_job_id: string | null;
+  annotation_count?: number;
+  schema?: AnnotationSchema | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A single annotation feature within an AnnotationSet. */
+export interface AnnotationFeature {
+  id: string;
+  annotation_set_id: string;
+  class_id: string;
+  geometry: GeoJSONGeometry;
+  confidence: number | null;
+  properties: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// --- Annotations (legacy flat model) ---
 export type AnnotationStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'archived';
 export type AnnotationSource = 'manual' | 'model' | 'import';
 export type AnnotationChangeType = 'create' | 'update' | 'delete' | 'bulk_update';

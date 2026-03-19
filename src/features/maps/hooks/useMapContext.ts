@@ -6,12 +6,11 @@
  * Unidirectional data flow contract:
  *
  *   TanStack Query (server state)
- *     └─► datasets / annotations / trackedObjects / alerts arrays (derived, read-only)
+ *     └─► datasets / annotations / trackedObjects / alerts / annotationSets arrays
  *         └─► initLayer() effects  ──► mapLayersStore.layers  (client layer configs)
  *                                         ├─► LeftPanel (layers list + legend)
  *                                         ├─► RightPanel (style panel reads layer.style)
- *                                         └─► MapEditorShell (passes visible/opacity/style
- *                                              to AnnotationRenderer, DatasetFootprintLayer, etc.)
+ *                                         └─► useMapSync → MapManager (Leaflet rendering)
  *
  * Rule: query data NEVER writes back to the server. All mutations go through
  * dedicated useMutation hooks in the panels that triggered them, then invalidate
@@ -26,11 +25,13 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { EP } from '@/lib/api/endpoints';
+import { annotationSetsApi } from '@/lib/api/annotation-sets';
+import { qk } from '@/lib/query-keys';
 import type { Dataset, Annotation, TrackedObject, Alert } from '@/types/api';
 import type { PaginatedResponse } from '@/types/common';
 import { useMapLayersStore } from '@/stores/mapLayersStore';
 
-export function useMapContext(projectId: string, orgId: string) {
+export function useMapContext(projectId: string, orgId: string, mapId?: string) {
   const initLayer = useMapLayersStore((s) => s.initLayer);
 
   const { data: datasetsData, isLoading: datasetsLoading, isError: datasetsError } = useQuery({
@@ -74,13 +75,21 @@ export function useMapContext(projectId: string, orgId: string) {
     enabled: !!projectId && !!orgId,
   });
 
+  // ── Annotation Sets (per-map, Phase 2) ──────────────────────────────────────
+  const { data: annotationSetsData, isLoading: annotationSetsLoading, isError: annotationSetsError } = useQuery({
+    queryKey: qk.annotationSets.listByMap(mapId ?? ''),
+    queryFn: () => annotationSetsApi.listByMap(mapId!),
+    enabled: !!mapId && !!orgId,
+  });
+
   const datasets = datasetsData?.items ?? [];
   const annotations = annotationsData?.items ?? [];
   const trackedObjects = trackingData?.items ?? [];
   const alerts = alertsData?.items ?? [];
+  const annotationSets = annotationSetsData?.items ?? [];
 
-  const isLoading = datasetsLoading || annotationsLoading || trackingLoading || alertsLoading;
-  const isError = datasetsError || annotationsError || trackingError || alertsError;
+  const isLoading = datasetsLoading || annotationsLoading || trackingLoading || alertsLoading || annotationSetsLoading;
+  const isError = datasetsError || annotationsError || trackingError || alertsError || annotationSetsError;
 
   // ── Store initialization — query data → mapLayersStore ────────────────────
   // Datasets are NOT auto-initialized here. They enter the layers store only
@@ -106,5 +115,34 @@ export function useMapContext(projectId: string, orgId: string) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alerts.length, initLayer]);
 
-  return { datasets, annotations, trackedObjects, alerts, isLoading, isError };
+  // ── Annotation sets → layer store ──────────────────────────────────────────
+  const annotationSetIds = annotationSets.map((s) => s.id).join(',');
+  useEffect(() => {
+    annotationSets.forEach((annSet) => {
+      const layerId = `annset-${annSet.id}`;
+      // Build per-class styles from schema classes
+      const classStyles: Record<string, { fillColor: string; strokeColor: string; strokeWidth: number; fillOpacity: number }> = {};
+      if (annSet.schema?.classes) {
+        for (const cls of annSet.schema.classes) {
+          if (cls.style?.definition) {
+            classStyles[cls.id] = {
+              fillColor: cls.style.definition.fillColor,
+              strokeColor: cls.style.definition.strokeColor,
+              strokeWidth: cls.style.definition.strokeWidth,
+              fillOpacity: cls.style.definition.fillOpacity,
+            };
+          }
+        }
+      }
+      initLayer(layerId, 'annotation', {
+        name: annSet.name,
+        sourceType: 'annotation_set',
+        annotationSetId: annSet.id,
+        classStyles: Object.keys(classStyles).length > 0 ? classStyles : undefined,
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annotationSetIds, initLayer]);
+
+  return { datasets, annotations, trackedObjects, alerts, annotationSets, isLoading, isError };
 }

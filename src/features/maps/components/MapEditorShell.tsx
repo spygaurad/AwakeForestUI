@@ -70,7 +70,7 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
   });
 
   // ── Feature data ───────────────────────────────────────────
-  const { datasets, annotations, trackedObjects, alerts } = useMapContext(projectId, orgId ?? '');
+  const { datasets, annotations, trackedObjects, alerts, annotationSets } = useMapContext(projectId, orgId ?? '', mapId);
 
   // ── MapManager sync — bridges Zustand → Leaflet ────────────
   useMapSync();
@@ -336,6 +336,31 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
     getMapManager().setLayerData('alerts-all', alerts);
   }, [alerts, mapReady]);
 
+  // Annotation sets — fetch GeoJSON features and push to MapManager
+  const annSetFetchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!mapReady) return;
+    const mm = getMapManager();
+    annotationSets.forEach((annSet) => {
+      const layerId = `annset-${annSet.id}`;
+      if (!layers[layerId]) return;
+      // Avoid re-fetching if already done
+      if (annSetFetchedRef.current.has(annSet.id)) return;
+      annSetFetchedRef.current.add(annSet.id);
+
+      import('@/lib/api/annotation-sets').then(({ annotationSetsApi }) => {
+        annotationSetsApi.getFeatures(annSet.id)
+          .then((fc) => {
+            mm.setLayerData(layerId, fc);
+          })
+          .catch(() => {
+            // Features endpoint may not exist yet — ignore gracefully
+            annSetFetchedRef.current.delete(annSet.id);
+          });
+      });
+    });
+  }, [annotationSets, layers, mapReady]);
+
   // Dataset footprints (for datasets on the map that don't have tileUrl yet)
   useEffect(() => {
     if (!mapReady) return;
@@ -533,6 +558,7 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
           annotations={annotations}
           trackedObjects={trackedObjects}
           alerts={alerts}
+          annotationSets={annotationSets}
           onRemoveDataset={handleRemoveDataset}
           onLayerMove={handleLayerMove}
         />

@@ -74,6 +74,8 @@ interface MapLayersState {
     tileServiceUrl?: string;
     parentDatasetId?: string;
     stacItemId?: string;
+    annotationSetId?: string;
+    classStyles?: Record<string, { fillColor: string; strokeColor: string; strokeWidth: number; fillOpacity: number }>;
   }) => void;
   removeLayer: (id: string) => void;
   setLayerVisible: (id: string, visible: boolean) => void;
@@ -98,6 +100,10 @@ interface MapLayersState {
   selectedItemsDatasetId: string | null;
   openItemsPanel: (datasetId: string) => void;
 
+  // annotation set panel
+  selectedAnnotationSetId: string | null;
+  openAnnotationSetPanel: (annotationSetId: string) => void;
+
   // right panel
   openFeaturePanel: (feature: SelectedFeature) => void;
   openStylePanel: (layerId: string) => void;
@@ -121,6 +127,7 @@ export const useMapLayersStore = create<MapLayersState>()(
     selectedFeature: null,
     selectedDatasetId: null,
     selectedItemsDatasetId: null,
+    selectedAnnotationSetId: null,
     measurementActive: false,
     measurementPoints: [],
     pendingAnnotation: null,
@@ -149,6 +156,12 @@ export const useMapLayersStore = create<MapLayersState>()(
         Object.assign(updates, {
           rightPanelMode: 'dataset' as const,
           selectedDatasetId: layerId,
+          selectedFeature: null,
+        });
+      } else if (layer.sourceType === 'annotation_set' && layer.annotationSetId) {
+        Object.assign(updates, {
+          rightPanelMode: 'annotation-set' as const,
+          selectedAnnotationSetId: layer.annotationSetId,
           selectedFeature: null,
         });
       } else {
@@ -183,6 +196,8 @@ export const useMapLayersStore = create<MapLayersState>()(
               tileServiceUrl: opts?.tileServiceUrl,
               parentDatasetId: opts?.parentDatasetId,
               stacItemId: opts?.stacItemId,
+              annotationSetId: opts?.annotationSetId,
+              classStyles: opts?.classStyles,
             },
           },
         };
@@ -284,6 +299,9 @@ export const useMapLayersStore = create<MapLayersState>()(
     openItemsPanel: (datasetId) =>
       set({ rightPanelMode: 'items', selectedItemsDatasetId: datasetId, selectedFeature: null, selectedLayerId: null }),
 
+    openAnnotationSetPanel: (annotationSetId) =>
+      set({ rightPanelMode: 'annotation-set', selectedAnnotationSetId: annotationSetId, selectedFeature: null, selectedLayerId: null }),
+
     openAnnotationPanel: () =>
       set({
         rightPanelMode: 'new-annotation',
@@ -363,7 +381,7 @@ export const useMapLayersStore = create<MapLayersState>()(
       set((s) => s.pendingAnnotation ? { rightPanelMode: 'new-annotation' } : s),
 
     closeRightPanel: () =>
-      set({ rightPanelMode: 'none', selectedLayerId: null, selectedFeature: null, selectedDatasetId: null, selectedItemsDatasetId: null }),
+      set({ rightPanelMode: 'none', selectedLayerId: null, selectedFeature: null, selectedDatasetId: null, selectedItemsDatasetId: null, selectedAnnotationSetId: null }),
 
     toggleMeasurement: () =>
       set((s) => {

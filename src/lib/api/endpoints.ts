@@ -106,6 +106,21 @@ export const EP = {
     bulkExport: 'annotations/bulk-export',
   },
 
+  annotationSets: {
+    listByMap: (mapId: string) => `maps/${mapId}/annotation-sets`,
+    detail: (id: string) => `annotation-sets/${id}`,
+    features: (id: string) => `annotation-sets/${id}/features`,
+    addAnnotation: (id: string) => `annotation-sets/${id}/annotations`,
+    annotationDetail: (setId: string, annId: string) =>
+      `annotation-sets/${setId}/annotations/${annId}`,
+  },
+
+  annotationSchemas: {
+    list: 'annotation-schemas',
+    create: 'annotation-schemas',
+    detail: (id: string) => `annotation-schemas/${id}`,
+  },
+
   labelSchemas: {
     list: 'label-schemas',
     create: 'label-schemas',

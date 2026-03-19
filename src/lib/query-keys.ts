@@ -27,6 +27,17 @@ export const qk = {
     versions: (id: string) => ['annotations', id, 'versions'] as const,
   },
 
+  annotationSets: {
+    listByMap: (mapId: string) => ['annotation-sets', 'map', mapId] as const,
+    detail: (id: string) => ['annotation-sets', id] as const,
+    features: (id: string) => ['annotation-sets', id, 'features'] as const,
+  },
+
+  annotationSchemas: {
+    list: (params?: Record<string, unknown>) => ['annotation-schemas', params] as const,
+    detail: (id: string) => ['annotation-schemas', id] as const,
+  },
+
   labelSchemas: {
     list: (params?: Record<string, unknown>) => ['label-schemas', params] as const,
     detail: (id: string) => ['label-schemas', id] as const,

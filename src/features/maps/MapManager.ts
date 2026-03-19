@@ -12,6 +12,7 @@ import type L from 'leaflet';
 import type { LayerConfig, LayerStyle } from './types';
 import type { Annotation, TrackedObject, Alert } from '@/types/api';
 import type { GeoJSONGeometry } from '@/types/geo';
+import type { GeoJSONFeatureCollection } from '@/lib/api/annotation-sets';
 import { useMapLayersStore, markFeatureClick } from '@/stores/mapLayersStore';
 import { getAuthToken } from '@/lib/api/client';
 import { PRIORITY_COLORS, ALERT_STATUS_COLORS } from './mapColors';
@@ -316,6 +317,11 @@ export class MapManager {
   }
 
   private createDataLayer(config: LayerConfig, data: unknown): L.Layer | null {
+    // Annotation set layers receive GeoJSON FeatureCollection directly
+    if (config.sourceType === 'annotation_set') {
+      return this.createAnnotationSetLayer(config, data as GeoJSONFeatureCollection);
+    }
+
     switch (config.type) {
       case 'annotation':
         return this.createAnnotationLayer(config, data as Annotation[]);
@@ -416,6 +422,95 @@ export class MapManager {
     });
 
     geoJsonLayer.setStyle({ opacity });
+    return geoJsonLayer;
+  }
+
+  /**
+   * Create a GeoJSON layer for an annotation set.
+   * Features are styled per class_id using config.classStyles.
+   */
+  private createAnnotationSetLayer(config: LayerConfig, fc: GeoJSONFeatureCollection): L.GeoJSON | null {
+    if (!this.L || !fc || fc.features.length === 0) return null;
+    const L = this.L;
+    const { style, opacity, classStyles } = config;
+
+    const resolveStyle = (classId?: string) => {
+      const cs = classId && classStyles?.[classId];
+      if (cs) {
+        return {
+          color: cs.strokeColor,
+          fillColor: cs.fillColor,
+          fillOpacity: cs.fillOpacity * opacity,
+          weight: cs.strokeWidth,
+        };
+      }
+      // Fallback to layer default style
+      return {
+        color: style.color,
+        fillColor: style.fillColor,
+        fillOpacity: style.fillOpacity * opacity,
+        weight: style.weight,
+      };
+    };
+
+    const geoJsonLayer = L.geoJSON(fc as unknown as GeoJSON.FeatureCollection, {
+      style: (feature) => {
+        const classId = feature?.properties?.class_id;
+        return resolveStyle(classId);
+      },
+      pointToLayer: (feature, latlng) => {
+        const classId = feature?.properties?.class_id;
+        const s = resolveStyle(classId);
+        return L.circleMarker(latlng, {
+          radius: style.radius,
+          ...s,
+        });
+      },
+      onEachFeature: (feature, layer) => {
+        layer.on('click', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          markFeatureClick();
+
+          const geomStats = feature.geometry
+            ? computeGeoStats(feature.geometry as Parameters<typeof computeGeoStats>[0])
+            : { featureType: 'annotation', stats: {} };
+
+          const pointCoords =
+            feature.geometry?.type === 'Point'
+              ? {
+                  latitude: fmtCoord((feature.geometry.coordinates as [number, number])[1], 'lat'),
+                  longitude: fmtCoord((feature.geometry.coordinates as [number, number])[0], 'lng'),
+                }
+              : {};
+
+          useMapLayersStore.getState().openFeaturePanel({
+            layerType: 'annotation',
+            featureType: geomStats.featureType,
+            featureId: feature.properties?.id ?? feature.id ?? config.id,
+            properties: {
+              ...feature.properties,
+              ...geomStats.stats,
+              ...pointCoords,
+            },
+            latlng: [e.latlng.lat, e.latlng.lng],
+            layerRef: layer,
+          });
+
+          const label = feature.properties?.class_name ?? feature.properties?.label ?? 'Annotation';
+          L.popup({ closeButton: false, className: 'af-map-popup', offset: [0, -6], maxWidth: 220 })
+            .setLatLng(e.latlng)
+            .setContent(
+              `<div class="af-popup-content">
+                <div class="af-popup-title">${label}</div>
+                ${feature.properties?.confidence != null ? `<div class="af-popup-sub">Confidence: ${(feature.properties.confidence * 100).toFixed(0)}%</div>` : ''}
+                <div class="af-popup-sub">See details in panel &rarr;</div>
+              </div>`
+            )
+            .openOn(this.map!);
+        });
+      },
+    });
+
     return geoJsonLayer;
   }
 

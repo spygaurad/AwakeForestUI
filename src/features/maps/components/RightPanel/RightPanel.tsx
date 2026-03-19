@@ -8,6 +8,7 @@ import { NewAnnotationPanel } from './NewAnnotationPanel';
 import { MeasurementPanel } from './MeasurementPanel';
 import { DatasetInfoPanel } from './DatasetInfoPanel';
 import { DatasetItemsPanel } from './DatasetItemsPanel';
+import { AnnotationSetPanel } from './AnnotationSetPanel';
 import { MC, MAP_Z } from '../../mapColors';
 import { useIsCompact } from '@/hooks/use-mobile';
 
@@ -18,6 +19,7 @@ const PANEL_TITLES: Record<string, string> = {
   measurement: 'Distance Measurement',
   dataset: 'Dataset',
   items: 'Dataset Items',
+  'annotation-set': 'Annotation Set',
 };
 
 interface RightPanelProps {
@@ -33,6 +35,7 @@ export function RightPanel({ topOffset, bottomOffset, mapId, projectId }: RightP
   const selectedLayerId = useMapLayersStore((s) => s.selectedLayerId);
   const selectedDatasetId = useMapLayersStore((s) => s.selectedDatasetId);
   const selectedItemsDatasetId = useMapLayersStore((s) => s.selectedItemsDatasetId);
+  const selectedAnnotationSetId = useMapLayersStore((s) => s.selectedAnnotationSetId);
   const closeRightPanel = useMapLayersStore((s) => s.closeRightPanel);
   const clearMeasurement = useMapLayersStore((s) => s.clearMeasurement);
   const layers = useMapLayersStore((s) => s.layers);
@@ -119,6 +122,9 @@ export function RightPanel({ topOffset, bottomOffset, mapId, projectId }: RightP
         )}
         {rightPanelMode === 'items' && selectedItemsDatasetId && (
           <DatasetItemsPanel datasetId={selectedItemsDatasetId} mapId={mapId} />
+        )}
+        {rightPanelMode === 'annotation-set' && selectedAnnotationSetId && (
+          <AnnotationSetPanel annotationSetId={selectedAnnotationSetId} />
         )}
       </div>
     </>
