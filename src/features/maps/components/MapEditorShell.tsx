@@ -16,6 +16,9 @@ import { qk } from '@/lib/query-keys';
 
 import { useMapContext } from '@/features/maps/hooks/useMapContext';
 import { useMeasureTool } from '@/features/maps/hooks/useMeasureTool';
+import { useMapSync } from '@/features/maps/hooks/useMapSync';
+import { getMapManager } from '@/features/maps/MapManager';
+import type { DatasetFootprintData } from '@/features/maps/MapManager';
 import { MAP_Z } from '@/features/maps/mapColors';
 import { useIsCompact } from '@/hooks/use-mobile';
 
@@ -32,22 +35,6 @@ const LeafletMap = dynamic(() => import('@/components/map/LeafletMap'), {
   ssr: false,
   loading: () => <div style={{ position: 'absolute', inset: 0, background: '#1c2119' }} />,
 });
-const AnnotationRenderer = dynamic(
-  () => import('@/components/map/AnnotationRenderer').then((m) => ({ default: m.AnnotationRenderer })),
-  { ssr: false }
-);
-const DatasetFootprintLayer = dynamic(
-  () => import('@/components/map/DatasetFootprintLayer').then((m) => ({ default: m.DatasetFootprintLayer })),
-  { ssr: false }
-);
-const TrackingLayer = dynamic(
-  () => import('@/components/map/TrackingLayer').then((m) => ({ default: m.TrackingLayer })),
-  { ssr: false }
-);
-const AlertMarkers = dynamic(
-  () => import('@/components/map/AlertMarkers').then((m) => ({ default: m.AlertMarkers })),
-  { ssr: false }
-);
 const MeasurementLayerDyn = dynamic(
   () => import('@/components/map/MeasurementLayer').then((m) => ({ default: m.MeasurementLayer })),
   { ssr: false }
@@ -85,8 +72,11 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
   // ── Feature data ───────────────────────────────────────────
   const { datasets, annotations, trackedObjects, alerts } = useMapContext(projectId, orgId ?? '');
 
+  // ── MapManager sync — bridges Zustand → Leaflet ────────────
+  useMapSync();
+
   // ── Measurement ────────────────────────────────────────────
-  const { totalDistance, clearMeasurement } = useMeasureTool();
+  const { totalDistance } = useMeasureTool();
   const measurementActive = useMapLayersStore((s) => s.measurementActive);
   const toggleMeasurement = useMapLayersStore((s) => s.toggleMeasurement);
   const layers = useMapLayersStore((s) => s.layers);
@@ -308,10 +298,8 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
             tileMaxZoom: tj.maxzoom,
           });
           // Fly to dataset extent on first tile load
-          const map = getMapInstance();
-          if (map && tj.bounds) {
-            const [west, south, east, north] = tj.bounds;
-            map.fitBounds([[south, west], [north, east]], { padding: [40, 40], maxZoom: 16 });
+          if (tj.bounds) {
+            getMapManager().fitBounds(tj.bounds);
           }
         })
         .catch(() => {
@@ -320,6 +308,53 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasets, setLayerTileConfig]);
+
+  // ── Push feature data to MapManager ─────────────────────────
+  // Annotations: grouped by label, each group is a layer
+  useEffect(() => {
+    if (!mapReady) return;
+    const mm = getMapManager();
+    const byLabel = annotations.reduce<Record<string, typeof annotations>>((acc, a) => {
+      if (!acc[a.label]) acc[a.label] = [];
+      acc[a.label].push(a);
+      return acc;
+    }, {});
+    Object.entries(byLabel).forEach(([label, items]) => {
+      mm.setLayerData(`annotation-${label}`, items);
+    });
+  }, [annotations, mapReady]);
+
+  // Tracking objects
+  useEffect(() => {
+    if (!mapReady) return;
+    getMapManager().setLayerData('tracking-all', trackedObjects);
+  }, [trackedObjects, mapReady]);
+
+  // Alerts
+  useEffect(() => {
+    if (!mapReady) return;
+    getMapManager().setLayerData('alerts-all', alerts);
+  }, [alerts, mapReady]);
+
+  // Dataset footprints (for datasets on the map that don't have tileUrl yet)
+  useEffect(() => {
+    if (!mapReady) return;
+    const mm = getMapManager();
+    datasets.forEach((d) => {
+      const layer = layers[d.id];
+      if (!layer) return;
+      // Only push footprint data if there's no tile URL (footprint is the fallback)
+      if (!layer.tileUrl && d.geometry) {
+        const footprintData: DatasetFootprintData = {
+          id: d.id,
+          name: d.name,
+          status: d.status,
+          geometry: d.geometry,
+        };
+        mm.setLayerData(d.id, footprintData);
+      }
+    });
+  }, [datasets, layers, mapReady]);
 
   // ── Only show datasets that are actually on this map ───────
   const activeDatasets = datasets.filter((d) => !!layers[d.id]);
@@ -437,13 +472,6 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
     }
   }, [mapId]);
 
-  // Group annotations by label
-  const annotationsByLabel = annotations.reduce<Record<string, typeof annotations>>((acc, a) => {
-    if (!acc[a.label]) acc[a.label] = [];
-    acc[a.label].push(a);
-    return acc;
-  }, {});
-
   return (
     // Root — fills the viewport as a flex column: TopNav → Map area → StatusBar
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#1a1e17', zIndex: MAP_Z.root }}>
@@ -475,59 +503,9 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
       {/* ── Map area — fills remaining space between nav and status bar ── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
-        {/* Map canvas */}
+        {/* Map canvas — all feature layers are managed by MapManager via useMapSync */}
         <div style={{ position: 'absolute', inset: 0, zIndex: MAP_Z.canvas }}>
           <LeafletMap />
-
-          {/* Annotation renderers */}
-          {Object.entries(annotationsByLabel).map(([label, items]) => {
-            const layerId = `annotation-${label}`;
-            const layer = layers[layerId];
-            return layer ? (
-              <AnnotationRenderer
-                key={layerId}
-                layerKey={layerId}
-                annotations={items}
-                visible={layer.visible}
-                opacity={layer.opacity}
-                style={layer.style}
-              />
-            ) : null;
-          })}
-
-          {datasets.map((dataset) => {
-            const layer = layers[dataset.id];
-            return layer ? (
-              <DatasetFootprintLayer
-                key={dataset.id}
-                dataset={dataset}
-                visible={layer.visible}
-                opacity={layer.opacity}
-                style={layer.style}
-                layerConfig={layer}
-              />
-            ) : null;
-          })}
-
-          {(() => {
-            const tl = layers['tracking-all'];
-            return tl ? (
-              <TrackingLayer
-                trackedObjects={trackedObjects}
-                visible={tl.visible}
-                opacity={tl.opacity}
-                style={tl.style}
-              />
-            ) : null;
-          })()}
-
-          {(() => {
-            const al = layers['alerts-all'];
-            return al ? (
-              <AlertMarkers alerts={alerts} visible={al.visible} opacity={al.opacity} />
-            ) : null;
-          })()}
-
           {measurementActive && <MeasurementLayerDyn />}
         </div>
 

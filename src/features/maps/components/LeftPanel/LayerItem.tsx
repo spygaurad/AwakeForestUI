@@ -19,6 +19,7 @@ export function LayerItem({ id, name, type }: LayerItemProps) {
   const setLayerVisible = useMapLayersStore((s) => s.setLayerVisible);
   const setLayerOpacity = useMapLayersStore((s) => s.setLayerOpacity);
   const openStylePanel = useMapLayersStore((s) => s.openStylePanel);
+  const focusLayer = useMapLayersStore((s) => s.focusLayer);
 
   if (!layer) return null;
 
@@ -56,8 +57,9 @@ export function LayerItem({ id, name, type }: LayerItemProps) {
           }}
         />
 
-        {/* Name */}
+        {/* Name — click to focus (select + zoom + open panel) */}
         <span
+          onClick={() => focusLayer(id)}
           style={{
             flex: 1,
             fontSize: 12,
@@ -65,6 +67,7 @@ export function LayerItem({ id, name, type }: LayerItemProps) {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            cursor: 'pointer',
           }}
           title={name}
         >

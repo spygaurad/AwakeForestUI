@@ -42,5 +42,8 @@ next-env.d.ts
 .agents/
 src_old/
 CLAUDE.md
+AGENTS.md
 
 docs/*
+# next-agents-md
+.next-docs/

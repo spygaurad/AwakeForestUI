@@ -54,6 +54,8 @@ export const DEFAULT_TILE_SERVICE_STYLE: LayerStyle = {
 
 export interface LayerConfig {
   id: string;
+  /** Human-readable name (used in tooltips, legend). Falls back to id if not set. */
+  name?: string;
   type: LayerType;
   sourceType?: LayerSourceType;
   visible: boolean;
@@ -72,6 +74,8 @@ export interface LayerConfig {
   parentDatasetId?: string;
   /** For stac_item layers — the STAC item ID */
   stacItemId?: string;
+  /** Spatial bounds [west, south, east, north] — enables zoom-to-layer */
+  bounds?: [number, number, number, number] | null;
 }
 
 export interface SelectedFeature {

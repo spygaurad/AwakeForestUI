@@ -41,6 +41,12 @@ interface MapLayersState {
   measurementActive: boolean;
   measurementPoints: [number, number][];
 
+  /** Set by focusLayer, consumed by useMapSync → MapManager.fitBounds */
+  zoomToBounds: [number, number, number, number] | null;
+  clearZoomToBounds: () => void;
+  /** Select + zoom + open panel for a layer */
+  focusLayer: (layerId: string) => void;
+
   // pending annotation (drawn but not yet saved)
   pendingAnnotation: PendingAnnotation | null;
   openAnnotationPanel: () => void;
@@ -62,6 +68,7 @@ interface MapLayersState {
 
   // layer config actions
   initLayer: (id: string, type: LayerType, opts?: {
+    name?: string;
     sourceType?: LayerSourceType;
     zIndex?: number;
     tileServiceUrl?: string;
@@ -118,12 +125,41 @@ export const useMapLayersStore = create<MapLayersState>()(
     measurementPoints: [],
     pendingAnnotation: null,
     autoSaveDirty: false,
+    zoomToBounds: null,
 
     setBackendLayerId: (datasetId, layerId) =>
       set((s) => ({ backendLayerIds: { ...s.backendLayerIds, [datasetId]: layerId } })),
 
     markAutoSaveDirty: () => set({ autoSaveDirty: true }),
     clearAutoSaveDirty: () => set({ autoSaveDirty: false }),
+
+    clearZoomToBounds: () => set({ zoomToBounds: null }),
+
+    focusLayer: (layerId) => {
+      const layer = get().layers[layerId];
+      if (!layer) return;
+      const updates: Partial<MapLayersState> = { selectedLayerId: layerId };
+
+      if (layer.bounds) {
+        updates.zoomToBounds = layer.bounds;
+      }
+
+      // Auto-open appropriate right panel
+      if (layer.type === 'dataset') {
+        Object.assign(updates, {
+          rightPanelMode: 'dataset' as const,
+          selectedDatasetId: layerId,
+          selectedFeature: null,
+        });
+      } else {
+        Object.assign(updates, {
+          rightPanelMode: 'style' as const,
+          selectedFeature: null,
+        });
+      }
+
+      set(updates);
+    },
 
     initLayer: (id, type, opts) =>
       set((s) => {
@@ -137,6 +173,7 @@ export const useMapLayersStore = create<MapLayersState>()(
             ...s.layers,
             [id]: {
               id,
+              name: opts?.name,
               type,
               sourceType: opts?.sourceType,
               visible: true,
@@ -184,7 +221,12 @@ export const useMapLayersStore = create<MapLayersState>()(
       set((s) => ({
         layers: {
           ...s.layers,
-          [id]: { ...s.layers[id], ...config },
+          [id]: {
+            ...s.layers[id],
+            ...config,
+            // Auto-populate bounds from tileBounds for zoom-to-layer
+            bounds: config.tileBounds ?? s.layers[id]?.bounds ?? null,
+          },
         },
       })),
 

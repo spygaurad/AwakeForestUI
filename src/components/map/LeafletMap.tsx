@@ -8,6 +8,7 @@ import '@geoman-io/leaflet-geoman-free';
 import { useMapStore, setMapInstance } from '@/stores/mapStore';
 import type { DrawTool } from '@/stores/mapStore';
 import { useMapLayersStore, wasFeatureJustClicked, markFeatureClick } from '@/stores/mapLayersStore';
+import { getMapManager } from '@/features/maps/MapManager';
 
 // Map Geoman shape names → our DrawTool enum
 const GEOMAN_TO_DRAW_TOOL: Record<string, DrawTool> = {
@@ -191,6 +192,7 @@ export default function LeafletMap() {
     });
     mapRef.current = map;
     setMapInstance(map);
+    getMapManager().init(map);
 
     // ── Tile layer ─────────────────────────────────────────
     const initialBasemapId = useMapStore.getState().activeBasemapId ?? 'osm';
@@ -511,6 +513,7 @@ export default function LeafletMap() {
       drawnControls.current.forEach((control) => control.remove());
       drawnControls.current.clear();
       drawnLayerData.current.clear();
+      getMapManager().destroy();
       setMapInstance(null);
       // Stop all animations before removing so pending rAF pan/zoom callbacks
       // don't run after the map panes are gone (fixes "_leaflet_pos" error).
