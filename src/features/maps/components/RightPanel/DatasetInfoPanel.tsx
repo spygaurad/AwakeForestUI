@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ExternalLink, Map, Layers, FileImage, ChevronRight } from 'lucide-react';
+import { ExternalLink, Map, Layers, FileImage, ChevronRight, Download } from 'lucide-react';
 import { datasetsApi } from '@/lib/api/datasets';
 import { qk } from '@/lib/query-keys';
 import { useMapLayersStore } from '@/stores/mapLayersStore';
@@ -207,6 +207,25 @@ export function DatasetInfoPanel({ datasetId, mapId }: DatasetInfoPanelProps) {
           } />
         )}
         <MetaRow label="Type" value={dataset.dataset_type} />
+        {dataset.metadata?.gsd_min != null && (
+          <MetaRow
+            label="GSD"
+            value={
+              dataset.metadata.gsd_max && dataset.metadata.gsd_max !== dataset.metadata.gsd_min
+                ? `${dataset.metadata.gsd_min.toFixed(2)}–${dataset.metadata.gsd_max.toFixed(2)} m`
+                : `${dataset.metadata.gsd_min.toFixed(2)} m`
+            }
+          />
+        )}
+        {dataset.metadata?.band_count && dataset.metadata.band_count.length > 0 && (
+          <MetaRow label="Bands" value={dataset.metadata.band_count.join(', ')} />
+        )}
+        {dataset.metadata?.native_crs && dataset.metadata.native_crs.length > 0 && (
+          <MetaRow label="CRS" value={dataset.metadata.native_crs.join(', ')} />
+        )}
+        {dataset.metadata?.total_size_bytes != null && (
+          <MetaRow label="Size" value={formatBytes(dataset.metadata.total_size_bytes)} />
+        )}
         <MetaRow label="Created" value={new Date(dataset.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} />
         <MetaRow label="Updated" value={new Date(dataset.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} />
       </div>
@@ -253,6 +272,36 @@ export function DatasetInfoPanel({ datasetId, mapId }: DatasetInfoPanelProps) {
           </div>
         )}
 
+        {dataset.status === 'ready' && (
+          <button
+            onClick={async () => {
+              try {
+                const { download_url } = await datasetsApi.getDownloadUrl(datasetId);
+                window.open(download_url, '_blank');
+              } catch {
+                toast.error('Download URL not available');
+              }
+            }}
+            style={{
+              height: 28,
+              borderRadius: 5,
+              border: `1px solid ${MC.border}`,
+              background: 'transparent',
+              color: MC.textSecondary,
+              fontSize: 11,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              width: '100%',
+            }}
+          >
+            <Download size={11} />
+            Download
+          </button>
+        )}
+
         <a
           href={`../datasets/${datasetId}`}
           target="_blank"
@@ -278,4 +327,11 @@ export function DatasetInfoPanel({ datasetId, mapId }: DatasetInfoPanelProps) {
       </div>
     </div>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }

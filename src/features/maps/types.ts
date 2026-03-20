@@ -80,6 +80,17 @@ export interface LayerConfig {
   classStyles?: Record<string, { fillColor: string; strokeColor: string; strokeWidth: number; fillOpacity: number }>;
   /** Spatial bounds [west, south, east, north] — enables zoom-to-layer */
   bounds?: [number, number, number, number] | null;
+  /** Scale-dependent visibility — layer hidden outside this zoom range */
+  minZoom?: number;
+  maxZoom?: number;
+  /** MVT vector tile format — when set, MapManager uses VectorGrid.protobuf */
+  tileFormat?: 'raster' | 'mvt';
+  /** For MVT layers — the layer name inside the protobuf tiles */
+  mvtLayerName?: string;
+  /** Loading state — true while data is being fetched for this layer */
+  loading?: boolean;
+  /** Error state — true when the layer has encountered persistent errors */
+  error?: boolean;
 }
 
 export interface SelectedFeature {

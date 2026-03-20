@@ -197,6 +197,12 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
     const map = getMapInstance();
     if (!map) return;
 
+    // 4E: Skip auto-save when offline — will retry on next interaction
+    if (!getMapManager().online) {
+      setAutoSaveStatus('idle');
+      return;
+    }
+
     setAutoSaveStatus('saving');
 
     const center = map.getCenter();
@@ -291,15 +297,38 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
       datasetsApi.getTileJson(d.id)
         .then((tj) => {
           if (!tj.tiles[0]) return;
+          
+          // Check if TileJSON bounds are defaults (world bounds or center-of-earth)
+          const isWorldBounds = tj.bounds 
+            && tj.bounds[0] === -180 
+            && tj.bounds[1] <= -85 
+            && tj.bounds[2] === 180 
+            && tj.bounds[3] >= 85;
+          const isCenterEarth = tj.bounds
+            && Math.abs(tj.bounds[0]) < 0.0001 
+            && Math.abs(tj.bounds[1]) < 0.0001 
+            && Math.abs(tj.bounds[2]) < 0.0001 
+            && Math.abs(tj.bounds[3]) < 0.0001;
+          
+          // Use dataset geometry bounds if TileJSON has default bounds
+          let tileBounds = tj.bounds;
+          if ((isWorldBounds || isCenterEarth) && d.geometry) {
+            // Compute bounds from geometry via MapManager
+            const geomBounds = getMapManager().computeBoundsFromGeometry(d.geometry);
+            if (geomBounds) {
+              tileBounds = geomBounds;
+            }
+          }
+          
           setLayerTileConfig(d.id, {
             tileUrl: tj.tiles[0],
-            tileBounds: tj.bounds,
+            tileBounds,
             tileMinZoom: tj.minzoom,
             tileMaxZoom: tj.maxzoom,
           });
           // Fly to dataset extent on first tile load
-          if (tj.bounds) {
-            getMapManager().fitBounds(tj.bounds);
+          if (tileBounds) {
+            getMapManager().fitBounds(tileBounds);
           }
         })
         .catch(() => {
@@ -338,28 +367,56 @@ export function MapEditorShell({ workspaceId, projectId, mapId }: MapEditorShell
 
   // Annotation sets — fetch GeoJSON features and push to MapManager
   const annSetFetchedRef = useRef<Set<string>>(new Set());
+
+  // Helper: fetch annotation set features and push to MapManager
+  const fetchAnnSetFeatures = useCallback((annSetId: string, layerId: string) => {
+    const mm = getMapManager();
+
+    // Set loading state
+    useMapLayersStore.setState((s) => ({
+      layers: s.layers[layerId]
+        ? { ...s.layers, [layerId]: { ...s.layers[layerId], loading: true } }
+        : s.layers,
+    }));
+
+    import('@/lib/api/annotation-sets').then(({ annotationSetsApi }) => {
+      annotationSetsApi.getFeatures(annSetId)
+        .then((fc) => {
+          mm.setLayerData(layerId, fc);
+          useMapLayersStore.setState((s) => ({
+            layers: s.layers[layerId]
+              ? { ...s.layers, [layerId]: { ...s.layers[layerId], loading: false, error: false } }
+              : s.layers,
+          }));
+        })
+        .catch(() => {
+          annSetFetchedRef.current.delete(annSetId);
+          useMapLayersStore.setState((s) => ({
+            layers: s.layers[layerId]
+              ? { ...s.layers, [layerId]: { ...s.layers[layerId], loading: false } }
+              : s.layers,
+          }));
+        });
+    });
+  }, []);
+
   useEffect(() => {
     if (!mapReady) return;
     const mm = getMapManager();
     annotationSets.forEach((annSet) => {
       const layerId = `annset-${annSet.id}`;
       if (!layers[layerId]) return;
-      // Avoid re-fetching if already done
       if (annSetFetchedRef.current.has(annSet.id)) return;
       annSetFetchedRef.current.add(annSet.id);
 
-      import('@/lib/api/annotation-sets').then(({ annotationSetsApi }) => {
-        annotationSetsApi.getFeatures(annSet.id)
-          .then((fc) => {
-            mm.setLayerData(layerId, fc);
-          })
-          .catch(() => {
-            // Features endpoint may not exist yet — ignore gracefully
-            annSetFetchedRef.current.delete(annSet.id);
-          });
+      fetchAnnSetFeatures(annSet.id, layerId);
+
+      // 4C: Register viewport callback for debounced reload on pan/zoom
+      mm.registerViewportCallback(layerId, () => {
+        fetchAnnSetFeatures(annSet.id, layerId);
       });
     });
-  }, [annotationSets, layers, mapReady]);
+  }, [annotationSets, layers, mapReady, fetchAnnSetFeatures]);
 
   // Dataset footprints (for datasets on the map that don't have tileUrl yet)
   useEffect(() => {

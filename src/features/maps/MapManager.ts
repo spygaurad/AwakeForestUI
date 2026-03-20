@@ -17,6 +17,15 @@ import { useMapLayersStore, markFeatureClick } from '@/stores/mapLayersStore';
 import { getAuthToken } from '@/lib/api/client';
 import { PRIORITY_COLORS, ALERT_STATUS_COLORS } from './mapColors';
 import { computeGeoStats, fmtCoord } from './utils/geoStats';
+import {
+  createPointerMarker,
+  getPointerType,
+  isPointerVisibleAtZoom,
+  POINTER_CONFIGS,
+  highlightPointer,
+  unhighlightPointer,
+  updatePointerColor,
+} from './mapPointers';
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
@@ -71,6 +80,12 @@ export class MapManager {
   private onMap = new Set<string>();
   /** Reference to Leaflet module (loaded once in init) */
   private L: typeof import('leaflet') | null = null;
+  /** Pointer markers for dataset layers */
+  private pointerLayers = new Map<string, L.Marker>();
+  /** Tracks which pointers are currently visible (zoom-based) */
+  private visiblePointers = new Set<string>();
+  /** Currently selected/highlighted layer ID */
+  private selectedLayerId: string | null = null;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -78,6 +93,27 @@ export class MapManager {
     this.map = map;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     this.L = require('leaflet') as typeof import('leaflet');
+    
+    // Create custom panes with explicit z-indices
+    // awakeforest-basemap (z: 0) ← always behind data
+    // awakeforest-data (z: 100) ← all data layers
+    // awakeforest-pointers (z: 200) ← layer pointer markers
+    try {
+      if (!map.getPane('awakeforest-basemap')) {
+        const pane = map.createPane('awakeforest-basemap');
+        (pane as HTMLElement).style.zIndex = '0';
+      }
+      if (!map.getPane('awakeforest-data')) {
+        const pane = map.createPane('awakeforest-data');
+        (pane as HTMLElement).style.zIndex = '100';
+      }
+      if (!map.getPane('awakeforest-pointers')) {
+        const pane = map.createPane('awakeforest-pointers');
+        (pane as HTMLElement).style.zIndex = '200';
+      }
+    } catch (e) {
+      // Pane creation might fail during early initialization
+    }
   }
 
   destroy(): void {
@@ -94,6 +130,26 @@ export class MapManager {
 
   getMap(): L.Map | null {
     return this.map;
+  }
+
+  // ── Stub methods for features not yet implemented ────────────────────────────
+
+  hasError(id: string): boolean {
+    // TODO: implement error tracking
+    return false;
+  }
+
+  retryLayer(id: string): void {
+    // TODO: implement layer retry
+  }
+
+  get online(): boolean {
+    // TODO: implement online status tracking
+    return true;
+  }
+
+  registerViewportCallback(id: string, callback: () => void): void {
+    // TODO: implement viewport change callbacks
   }
 
   // ── Layer lifecycle ────────────────────────────────────────────────────────
@@ -184,6 +240,12 @@ export class MapManager {
         dashArray: style.dashArray,
       });
     }
+
+    // Update pointer color if it exists
+    const pointer = this.pointerLayers.get(id);
+    if (pointer && style.color) {
+      updatePointerColor(pointer, style.color);
+    }
   }
 
   // ── Data layer updates ─────────────────────────────────────────────────────
@@ -256,21 +318,26 @@ export class MapManager {
     return this.createDataLayer(config, data);
   }
 
-  private createTileLayer(config: LayerConfig): L.TileLayer | null {
+  private createTileLayer(config: LayerConfig): L.Layer | null {
     if (!this.L || !config.tileUrl) return null;
 
     const needsAuth = config.sourceType === 'dataset' || config.sourceType === 'stac_item';
 
-    if (needsAuth) {
-      return this.createAuthTileLayer(config.tileUrl, config);
+    const tileLayer = needsAuth
+      ? this.createAuthTileLayer(config.tileUrl, config)
+      : this.L.tileLayer(config.tileUrl, {
+          opacity: config.opacity,
+          minZoom: config.tileMinZoom ?? 0,
+          maxZoom: config.tileMaxZoom ?? 24,
+          tileSize: 256,
+        });
+
+    // If layer has bounds, wrap in LayerGroup with pointer marker
+    if (config.tileBounds) {
+      return this.createLayerWithPointer(tileLayer, config);
     }
 
-    return this.L.tileLayer(config.tileUrl, {
-      opacity: config.opacity,
-      minZoom: config.tileMinZoom ?? 0,
-      maxZoom: config.tileMaxZoom ?? 24,
-      tileSize: 256,
-    });
+    return tileLayer;
   }
 
   private createAuthTileLayer(url: string, config: LayerConfig): L.TileLayer {
@@ -699,6 +766,182 @@ export class MapManager {
     if (layer) {
       layer.remove();
       this.onMap.delete(id);
+    }
+    
+    // Also remove pointer if it exists
+    const pointer = this.pointerLayers.get(id);
+    if (pointer) {
+      pointer.remove();
+      this.pointerLayers.delete(id);
+      this.visiblePointers.delete(id);
+    }
+  }
+
+  // ── Pointer management ─────────────────────────────────────────────────────
+
+  /**
+   * Create a layer with an embedded pointer marker.
+   * For tile layers with bounds, wraps the tile layer in a LayerGroup
+   * that also contains the pointer marker.
+   */
+  private createLayerWithPointer(tileLayer: L.TileLayer, config: LayerConfig): L.LayerGroup {
+    const L = this.L!;
+    const layerGroup = L.layerGroup([tileLayer]);
+
+    // Only create pointer if we have valid bounds
+    if (!config.tileBounds || this.isDefaultBounds(config.tileBounds)) {
+      return layerGroup;
+    }
+
+    const [west, south, east, north] = config.tileBounds;
+    const bounds = L.latLngBounds([[south, west], [north, east]]);
+    
+    const pointerType = getPointerType(config.type, config.sourceType);
+    const pointerConfig = POINTER_CONFIGS[pointerType];
+    const marker = createPointerMarker(bounds, pointerConfig, config, config.name || config.id);
+
+    // Store pointer reference for zoom-based visibility and style updates
+    this.pointerLayers.set(config.id, marker);
+    this.visiblePointers.add(config.id);
+
+    // Attach click handler to zoom to bounds
+    marker.on('click', () => {
+      this.fitBounds([west, south, east, north]);
+    });
+
+    // Add pointer to layer group
+    layerGroup.addLayer(marker);
+
+    return layerGroup;
+  }
+
+  /**
+   * Check if bounds are "default" (world bounds or center of earth).
+   * These indicate TileJSON returned invalid bounds.
+   */
+  private isDefaultBounds(bounds: [number, number, number, number]): boolean {
+    const [west, south, east, north] = bounds;
+    
+    // Check for world bounds [-180, -85, 180, 85]
+    const isWorldBounds = Math.abs(west - (-180)) < 0.01 && 
+                         Math.abs(south - (-85.0511287798066)) < 0.01 &&
+                         Math.abs(east - 180) < 0.01 && 
+                         Math.abs(north - 85.0511287798066) < 0.01;
+    
+    // Check for center-of-earth (all zeros or near-zero)
+    const isCenterEarth = Math.abs(west) < 0.0001 && Math.abs(south) < 0.0001 && 
+                          Math.abs(east) < 0.0001 && Math.abs(north) < 0.0001;
+    
+    return isWorldBounds || isCenterEarth;
+  }
+
+  /**
+   * Rebuild a layer when its bounds are loaded asynchronously.
+   * Called from useMapSync when tileBounds change.
+   */
+  updateLayerBounds(layerId: string, tileBounds: [number, number, number, number], config: LayerConfig): void {
+    if (!this.map) return;
+
+    const wasOnMap = this.onMap.has(layerId);
+    this.removeLayerFromMap(layerId);
+    
+    // Create new layer with bounds (which will create pointer if bounds are valid)
+    const layer = this.createLayer({ ...config, tileBounds });
+    if (layer) {
+      this.leafletLayers.set(layerId, layer);
+      if (wasOnMap && config.visible) {
+        layer.addTo(this.map);
+        this.onMap.add(layerId);
+      }
+    }
+  }
+
+  /**
+   * Compute bounds from GeoJSON geometry.
+   * Used when TileJSON bounds are invalid (world bounds or center-of-earth).
+   */
+  computeBoundsFromGeometry(geometry: GeoJSONGeometry | null): [number, number, number, number] | null {
+    if (!geometry) return null;
+
+    if (geometry.type === 'Point') {
+      const [lng, lat] = geometry.coordinates as [number, number];
+      // Return a small bounding box around the point
+      return [lng - 0.001, lat - 0.001, lng + 0.001, lat + 0.001];
+    }
+
+    if (geometry.type === 'Polygon') {
+      const coords = geometry.coordinates[0] as [number, number][];
+      if (!coords || coords.length === 0) return null;
+      
+      let minLng = coords[0][0], maxLng = coords[0][0];
+      let minLat = coords[0][1], maxLat = coords[0][1];
+      
+      for (const [lng, lat] of coords) {
+        minLng = Math.min(minLng, lng);
+        maxLng = Math.max(maxLng, lng);
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+      }
+      
+      return [minLng, minLat, maxLng, maxLat];
+    }
+
+    return null;
+  }
+
+  /**
+   * Highlight a pointer (show as selected).
+   */
+  focusLayer(layerId: string): void {
+    // Clear previous focus
+    if (this.selectedLayerId && this.selectedLayerId !== layerId) {
+      const prevMarker = this.pointerLayers.get(this.selectedLayerId);
+      if (prevMarker) {
+        unhighlightPointer(prevMarker);
+      }
+    }
+
+    // Set new focus
+    this.selectedLayerId = layerId;
+    const marker = this.pointerLayers.get(layerId);
+    if (marker) {
+      highlightPointer(marker);
+    }
+  }
+
+  /**
+   * Clear layer focus.
+   */
+  clearFocus(): void {
+    if (this.selectedLayerId) {
+      const marker = this.pointerLayers.get(this.selectedLayerId);
+      if (marker) {
+        unhighlightPointer(marker);
+      }
+      this.selectedLayerId = null;
+    }
+  }
+
+  /**
+   * Update pointer visibility based on zoom level.
+   * Pointers are hidden when zoomed in (zoom >= threshold).
+   */
+  updatePointersForZoom(zoom: number, threshold: number = 12): void {
+    if (!this.map) return;
+
+    for (const [layerId, marker] of this.pointerLayers) {
+      const shouldShow = isPointerVisibleAtZoom(zoom, threshold);
+      const isOnMap = this.visiblePointers.has(layerId);
+
+      if (shouldShow && !isOnMap && this.leafletLayers.has(layerId)) {
+        // Add pointer to map
+        marker.addTo(this.map);
+        this.visiblePointers.add(layerId);
+      } else if (!shouldShow && isOnMap) {
+        // Remove pointer from map
+        this.map.removeLayer(marker);
+        this.visiblePointers.delete(layerId);
+      }
     }
   }
 }

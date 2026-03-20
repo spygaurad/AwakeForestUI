@@ -36,6 +36,9 @@ export const qk = {
   annotationSchemas: {
     list: (params?: Record<string, unknown>) => ['annotation-schemas', params] as const,
     detail: (id: string) => ['annotation-schemas', id] as const,
+    classes: (schemaId: string) => ['annotation-schemas', schemaId, 'classes'] as const,
+    classDetail: (schemaId: string, classId: string) =>
+      ['annotation-schemas', schemaId, 'class', classId] as const,
   },
 
   labelSchemas: {

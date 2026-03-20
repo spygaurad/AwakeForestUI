@@ -64,6 +64,11 @@ export function useMapSync(): void {
           if (curr.tileUrl !== old.tileUrl) {
             mm.rebuildTileLayer(id, curr);
           }
+
+          // TileBounds changed — create/update pointer marker
+          if (curr.tileBounds !== old.tileBounds && curr.tileBounds) {
+            mm.updateLayerBounds(id, curr.tileBounds, curr);
+          }
         }
 
         prevLayersRef.current = current;
@@ -83,6 +88,31 @@ export function useMapSync(): void {
         mm.fitBounds(bounds);
         // Clear after handling
         useMapLayersStore.getState().clearZoomToBounds();
+      }
+    );
+    return unsub;
+  }, []);
+
+  // ── Handle zoom level changes for pointer visibility ────────────────────────
+  useEffect(() => {
+    const unsub = useMapLayersStore.subscribe(
+      (s) => s.currentZoom,
+      (zoom) => {
+        const mm = getMapManager();
+        mm.updatePointersForZoom(zoom);
+      }
+    );
+    return unsub;
+  }, []);
+
+  // ── Handle layer focus changes ─────────────────────────────────────────────
+  useEffect(() => {
+    const unsub = useMapLayersStore.subscribe(
+      (s) => s.focusedLayerId,
+      (layerId) => {
+        if (!layerId) return;
+        const mm = getMapManager();
+        mm.focusLayer(layerId);
       }
     );
     return unsub;

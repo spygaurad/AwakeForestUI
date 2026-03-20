@@ -40,12 +40,15 @@ interface MapLayersState {
   selectedFeature: SelectedFeature | null;
   measurementActive: boolean;
   measurementPoints: [number, number][];
+  currentZoom: number;
+  focusedLayerId: string | null;
 
   /** Set by focusLayer, consumed by useMapSync → MapManager.fitBounds */
   zoomToBounds: [number, number, number, number] | null;
   clearZoomToBounds: () => void;
   /** Select + zoom + open panel for a layer */
   focusLayer: (layerId: string) => void;
+  setCurrentZoom: (zoom: number) => void;
 
   // pending annotation (drawn but not yet saved)
   pendingAnnotation: PendingAnnotation | null;
@@ -130,6 +133,8 @@ export const useMapLayersStore = create<MapLayersState>()(
     selectedAnnotationSetId: null,
     measurementActive: false,
     measurementPoints: [],
+    currentZoom: 2,
+    focusedLayerId: null,
     pendingAnnotation: null,
     autoSaveDirty: false,
     zoomToBounds: null,
@@ -142,10 +147,15 @@ export const useMapLayersStore = create<MapLayersState>()(
 
     clearZoomToBounds: () => set({ zoomToBounds: null }),
 
+    setCurrentZoom: (zoom: number) => set({ currentZoom: zoom }),
+
     focusLayer: (layerId) => {
       const layer = get().layers[layerId];
       if (!layer) return;
-      const updates: Partial<MapLayersState> = { selectedLayerId: layerId };
+      const updates: Partial<MapLayersState> = {
+        selectedLayerId: layerId,
+        focusedLayerId: layerId, // Trigger map focus + pointer highlight
+      };
 
       if (layer.bounds) {
         updates.zoomToBounds = layer.bounds;

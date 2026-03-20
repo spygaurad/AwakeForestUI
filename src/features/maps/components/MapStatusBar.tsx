@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { formatDistance } from '@/features/maps/hooks/useMeasureTool';
 import { MC } from '../mapColors';
 
@@ -18,6 +19,17 @@ export function MapStatusBar({
   totalDistanceM,
   autoSaveStatus = 'idle',
 }: MapStatusBarProps) {
+  // 4E: Network offline detection
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline); };
+  }, []);
+
   return (
     <div
       style={{
@@ -45,6 +57,23 @@ export function MapStatusBar({
         >
           EPSG:3857
         </span>
+
+        {/* Offline indicator */}
+        {!online && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 10,
+              color: MC.warning,
+              fontFamily: 'monospace',
+            }}
+          >
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC.warning, flexShrink: 0 }} />
+            Offline
+          </span>
+        )}
 
         {/* Auto-save indicator */}
         {autoSaveStatus !== 'idle' && (

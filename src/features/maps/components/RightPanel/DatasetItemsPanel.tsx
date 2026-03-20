@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Calendar, FileImage, Map, Loader, ChevronLeft } from 'lucide-react';
+import { Calendar, FileImage, Map, Loader, ChevronLeft, Filter } from 'lucide-react';
 import { datasetsApi } from '@/lib/api/datasets';
 import { qk } from '@/lib/query-keys';
 import { useMapLayersStore } from '@/stores/mapLayersStore';
@@ -24,6 +24,9 @@ export function DatasetItemsPanel({ datasetId, mapId }: DatasetItemsPanelProps) 
   const openDatasetPanel = useMapLayersStore((s) => s.openDatasetPanel);
   const layers = useMapLayersStore((s) => s.layers);
   const [addingItemId, setAddingItemId] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   // Fetch dataset details
   const { data: dataset } = useQuery({
@@ -38,7 +41,19 @@ export function DatasetItemsPanel({ datasetId, mapId }: DatasetItemsPanelProps) 
     enabled: !!datasetId,
   });
 
-  const items = itemsData?.items ?? [];
+  const allItems = useMemo(() => itemsData?.items ?? [], [itemsData]);
+
+  // Apply date range filter
+  const items = useMemo(() => {
+    if (!dateFrom && !dateTo) return allItems;
+    return allItems.filter((item) => {
+      if (!item.datetime) return true;
+      const d = new Date(item.datetime).getTime();
+      if (dateFrom && d < new Date(dateFrom).getTime()) return false;
+      if (dateTo && d > new Date(dateTo + 'T23:59:59').getTime()) return false;
+      return true;
+    });
+  }, [allItems, dateFrom, dateTo]);
 
   // Add a single item as a stac_item layer on the map
   const addItemToMap = async (item: DatasetItem) => {
@@ -145,10 +160,85 @@ export function DatasetItemsPanel({ datasetId, mapId }: DatasetItemsPanelProps) 
             {dataset?.name ?? 'Dataset'}
           </div>
           <div style={{ fontSize: 10, color: MC.textMuted }}>
-            {items.length} item{items.length !== 1 ? 's' : ''} · Select individual files to overlay
+            {items.length} item{items.length !== 1 ? 's' : ''}
+            {items.length !== allItems.length && ` of ${allItems.length}`}
+            {' · Select individual files to overlay'}
           </div>
         </div>
+
+        {/* Filter toggle */}
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          title="Filter items"
+          style={{
+            width: 28, height: 28,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: showFilters ? MC.accentDim : 'transparent',
+            border: showFilters ? `1px solid ${MC.accent}` : 'none',
+            color: showFilters ? MC.accent : MC.textMuted,
+            cursor: 'pointer', borderRadius: 4, flexShrink: 0,
+          }}
+        >
+          <Filter size={12} />
+        </button>
       </div>
+
+      {/* Date range filter */}
+      {showFilters && (
+        <div style={{
+          padding: '8px 14px',
+          borderBottom: `1px solid ${MC.border}`,
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center',
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 10, color: MC.textMuted, flexShrink: 0 }}>Date</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            style={{
+              flex: 1,
+              background: MC.inputBg ?? MC.hoverBg,
+              border: `1px solid ${MC.border}`,
+              borderRadius: 4,
+              color: MC.text,
+              fontSize: 10,
+              padding: '3px 6px',
+              outline: 'none',
+            }}
+          />
+          <span style={{ fontSize: 10, color: MC.textMuted }}>–</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            style={{
+              flex: 1,
+              background: MC.inputBg ?? MC.hoverBg,
+              border: `1px solid ${MC.border}`,
+              borderRadius: 4,
+              color: MC.text,
+              fontSize: 10,
+              padding: '3px 6px',
+              outline: 'none',
+            }}
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              style={{
+                background: 'transparent', border: 'none',
+                color: MC.textMuted, cursor: 'pointer', fontSize: 10,
+                padding: '2px 4px',
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Items list */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>

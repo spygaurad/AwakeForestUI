@@ -119,6 +119,11 @@ export const EP = {
     list: 'annotation-schemas',
     create: 'annotation-schemas',
     detail: (id: string) => `annotation-schemas/${id}`,
+    classes: (schemaId: string) => `annotation-schemas/${schemaId}/classes`,
+    classDetail: (schemaId: string, classId: string) =>
+      `annotation-schemas/${schemaId}/classes/${classId}`,
+    classStyle: (schemaId: string, classId: string) =>
+      `annotation-schemas/${schemaId}/classes/${classId}/style`,
   },
 
   labelSchemas: {
