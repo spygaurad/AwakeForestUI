@@ -1,8 +1,11 @@
 'use client';
 
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMapLayersStore } from '@/stores/mapLayersStore';
 import { useMapStore } from '@/stores/mapStore';
+import { annotationSetsApi } from '@/lib/api/annotation-sets';
+import { qk } from '@/lib/query-keys';
 import { MC } from '../../mapColors';
 import { AnnotationGeometryPreview } from './_annotation/AnnotationGeometryPreview';
 import { AnnotationStylePicker } from './_annotation/AnnotationStylePicker';
@@ -21,6 +24,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 export function NewAnnotationPanel() {
+  const queryClient = useQueryClient();
   const pending      = useMapLayersStore((s) => s.pendingAnnotation);
   const setField     = useMapLayersStore((s) => s.setPendingAnnotationField);
   const setStyle     = useMapLayersStore((s) => s.setPendingAnnotationStyle);
@@ -33,9 +37,28 @@ export function NewAnnotationPanel() {
   const drawnGeometry     = useMapStore((s) => s.drawnGeometry);
   const drawnCircleRadius = useMapStore((s) => s.drawnCircleRadius);
 
+  const saveMutation = useMutation({
+    mutationFn: (params: { setId: string; classId: string; geometry: unknown; properties: Record<string, unknown> | null }) =>
+      annotationSetsApi.addFeature(params.setId, {
+        class_id: params.classId,
+        geometry: params.geometry as Parameters<typeof annotationSetsApi.addFeature>[1]['geometry'],
+        properties: params.properties,
+      }),
+    onSuccess: (_data, vars) => {
+      // Invalidate the features query so MapManager re-fetches
+      queryClient.invalidateQueries({ queryKey: qk.annotationSets.features(vars.setId) });
+      queryClient.invalidateQueries({ queryKey: qk.annotationSets.detail(vars.setId) });
+      toast.success('Annotation saved');
+      useMapStore.getState().setDrawnGeometry(null);
+      clearPending();
+    },
+    onError: () => toast.error('Failed to save annotation'),
+  });
+
   if (!pending) return null;
 
   const isPoint = drawnShapeType === 'point';
+  const hasAnnotationSet = !!pending.annotationSetId && !!pending.classId;
 
   const handleCancel = () => {
     useMapStore.getState().setDrawnGeometry(null);
@@ -43,12 +66,27 @@ export function NewAnnotationPanel() {
   };
 
   const handleSave = () => {
+    // If saving to an annotation set, POST to backend
+    if (hasAnnotationSet && drawnGeometry) {
+      const props: Record<string, unknown> = {};
+      pending.attributes.forEach((attr) => {
+        if (attr.key.trim()) props[attr.key] = attr.value;
+      });
+      saveMutation.mutate({
+        setId: pending.annotationSetId!,
+        classId: pending.classId!,
+        geometry: drawnGeometry,
+        properties: Object.keys(props).length > 0 ? props : null,
+      });
+      return;
+    }
+
+    // Legacy flow: local-only save
     if (!pending.label.trim()) {
       toast.error('Label is required');
       return;
     }
-    // TODO: POST to /annotations API
-    toast.success('Annotation saved (demo)');
+    toast.success('Annotation saved (local)');
     useMapStore.getState().setDrawnGeometry(null);
     clearPending();
   };

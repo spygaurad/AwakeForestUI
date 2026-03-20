@@ -6,7 +6,8 @@ import { LayerGroupSection } from './LayerGroupSection';
 import { DatasetLayerItem } from './DatasetLayerItem';
 import { AnnotationLayerItem } from './AnnotationLayerItem';
 import { LayerItem } from './LayerItem';
-import type { Dataset, Annotation, TrackedObject, Alert } from '@/types/api';
+import { LayerContextMenu } from './LayerContextMenu';
+import type { Dataset, Annotation, TrackedObject, Alert, AnnotationSet } from '@/types/api';
 import { useMapLayersStore } from '@/stores/mapLayersStore';
 import { MC, MAP_Z } from '../../mapColors';
 import { useIsCompact } from '@/hooks/use-mobile';
@@ -24,6 +25,7 @@ export interface LeftPanelProps {
   annotations: Annotation[];
   trackedObjects: TrackedObject[];
   alerts: Alert[];
+  annotationSets?: AnnotationSet[];
   onRemoveDataset?: (datasetId: string) => void;
   onLayerMove?: (layerId: string, direction: 'up' | 'down') => void;
 }
@@ -37,6 +39,7 @@ export function LeftPanel({
   annotations,
   trackedObjects,
   alerts,
+  annotationSets = [],
   onRemoveDataset,
   onLayerMove,
 }: LeftPanelProps) {
@@ -182,7 +185,7 @@ export function LeftPanel({
           <>
             {/* Z-index ordered layer stack */}
             {sortedLayerEntries.length > 0 && (
-              <div style={{ padding: '4px 0' }}>
+              <div role="tree" aria-label="Map layers" style={{ padding: '4px 0' }}>
                 <div style={{
                   padding: '4px 10px 6px',
                   fontSize: 9,
@@ -203,6 +206,8 @@ export function LeftPanel({
                 {sortedLayerEntries.map(([id, layer], idx) => {
                   const dataset = datasets.find((d) => d.id === id);
                   const annotationLabel = id.startsWith('annotation-') ? id.replace('annotation-', '') : null;
+                  const annSetId = id.startsWith('annset-') ? id.replace('annset-', '') : null;
+                  const annSet = annSetId ? annotationSets.find((s) => s.id === annSetId) : null;
                   const isFirst = idx === 0;
                   const isLast = idx === sortedLayerEntries.length - 1;
 
@@ -259,6 +264,18 @@ export function LeftPanel({
                             dataset={dataset}
                             onRemove={onRemoveDataset ? () => onRemoveDataset(dataset.id) : undefined}
                           />
+                        ) : annSet ? (
+                          <LayerItem
+                            id={id}
+                            name={annSet.name}
+                            type="annotation"
+                            legend={
+                              annSet.schema?.classes?.map((cls) => ({
+                                label: cls.name,
+                                color: cls.style?.definition?.fillColor ?? MC.accent,
+                              })) ?? undefined
+                            }
+                          />
                         ) : annotationLabel ? (
                           <AnnotationLayerItem
                             label={annotationLabel}
@@ -284,6 +301,13 @@ export function LeftPanel({
                           />
                         )}
                       </div>
+
+                      {/* Context menu for non-dataset layers */}
+                      {!dataset && (
+                        <div style={{ flexShrink: 0, paddingTop: 4, paddingRight: 4 }}>
+                          <LayerContextMenu layerId={id} />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -330,6 +354,21 @@ export function LeftPanel({
         {/* ── LEGEND tab ─────────────────────────────────────── */}
         {tab === 'legend' && (
           <div style={{ padding: '8px 12px' }}>
+            {/* Annotation sets with class legends */}
+            {annotationSets.filter((s) => s.schema?.classes?.length).map((annSet) => (
+              <LegendSection key={annSet.id} title={annSet.name}>
+                {annSet.schema!.classes!.map((cls) => (
+                  <LegendRow
+                    key={cls.id}
+                    color={cls.style?.definition?.fillColor ?? MC.accent}
+                    label={cls.name}
+                    count={0}
+                    shape="square"
+                  />
+                ))}
+              </LegendSection>
+            ))}
+
             {Object.entries(annotationsByLabel).length > 0 && (
               <LegendSection title="Annotations">
                 {Object.entries(annotationsByLabel).map(([label, items]) => (

@@ -8,6 +8,8 @@ import '@geoman-io/leaflet-geoman-free';
 import { useMapStore, setMapInstance } from '@/stores/mapStore';
 import type { DrawTool } from '@/stores/mapStore';
 import { useMapLayersStore, wasFeatureJustClicked, markFeatureClick } from '@/stores/mapLayersStore';
+import { getMapManager } from '@/features/maps/MapManager';
+import { useMapSync } from '@/features/maps/hooks/useMapSync';
 
 // Map Geoman shape names → our DrawTool enum
 const GEOMAN_TO_DRAW_TOOL: Record<string, DrawTool> = {
@@ -191,6 +193,7 @@ export default function LeafletMap() {
     });
     mapRef.current = map;
     setMapInstance(map);
+    getMapManager().init(map);
 
     // ── Tile layer ─────────────────────────────────────────
     const initialBasemapId = useMapStore.getState().activeBasemapId ?? 'osm';
@@ -199,6 +202,7 @@ export default function LeafletMap() {
       attribution: initialBm.attribution,
       maxNativeZoom: initialBm.maxNativeZoom,
       maxZoom: 22,
+      pane: 'awakeforest-basemap',
     }).addTo(map);
 
     // ── Geoman config — no native toolbar (toolbar lives in MapTopBar) ──
@@ -254,7 +258,10 @@ export default function LeafletMap() {
     const handleZoomEnd = () => {
       if (!mounted) return;
       const c = map.getCenter();
-      useMapStore.getState().setCenter([c.lat, c.lng], map.getZoom());
+      const zoom = map.getZoom();
+      useMapStore.getState().setCenter([c.lat, c.lng], zoom);
+      // Update store's currentZoom for pointer visibility subscriptions
+      useMapLayersStore.getState().setCurrentZoom(zoom);
     };
     const handleMoveEnd = () => {
       if (!mounted) return;
@@ -462,6 +469,7 @@ export default function LeafletMap() {
         attribution: bm.attribution,
         maxNativeZoom: bm.maxNativeZoom,
         maxZoom: 22,
+        pane: 'awakeforest-basemap',
       }).addTo(mapRef.current);
     });
 
@@ -511,6 +519,7 @@ export default function LeafletMap() {
       drawnControls.current.forEach((control) => control.remove());
       drawnControls.current.clear();
       drawnLayerData.current.clear();
+      getMapManager().destroy();
       setMapInstance(null);
       // Stop all animations before removing so pending rAF pan/zoom callbacks
       // don't run after the map panes are gone (fixes "_leaflet_pos" error).
@@ -521,6 +530,9 @@ export default function LeafletMap() {
       pendingLayerRef.current = null;
     };
   }, []);
+
+  // Sync Zustand store changes with MapManager
+  useMapSync();
 
   return <div ref={containerRef} className="absolute inset-0" />;
 }

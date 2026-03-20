@@ -12,6 +12,7 @@ import { useUploadStore } from '@/stores/uploadStore';
 import { UploadWizard } from '@/features/datasets/components/UploadWizard';
 import { MC, MAP_Z } from '../mapColors';
 import { getMapInstance } from '@/stores/mapStore';
+import { getMapManager } from '../MapManager';
 
 type LibTab = 'datasets' | 'sources' | 'upload';
 
@@ -86,16 +87,39 @@ export function LibraryPanel({
         try {
           const tj = await datasetsApi.getTileJson(d.id);
           if (tj.tiles[0]) {
+            // Check if TileJSON bounds are defaults (world bounds or center-of-earth)
+            const isWorldBounds = tj.bounds 
+              && tj.bounds[0] === -180 
+              && tj.bounds[1] <= -85 
+              && tj.bounds[2] === 180 
+              && tj.bounds[3] >= 85;
+            const isCenterEarth = tj.bounds
+              && Math.abs(tj.bounds[0]) < 0.0001 
+              && Math.abs(tj.bounds[1]) < 0.0001 
+              && Math.abs(tj.bounds[2]) < 0.0001 
+              && Math.abs(tj.bounds[3]) < 0.0001;
+            
+            // Use dataset geometry bounds if TileJSON has default bounds
+            let tileBounds = tj.bounds;
+            if ((isWorldBounds || isCenterEarth) && d.geometry) {
+              // Compute bounds from geometry via MapManager
+              const mm = getMapManager();
+              const geomBounds = mm.computeBoundsFromGeometry(d.geometry);
+              if (geomBounds) {
+                tileBounds = geomBounds;
+              }
+            }
+            
             setLayerTileConfig(d.id, {
               tileUrl: tj.tiles[0],
-              tileBounds: tj.bounds,
+              tileBounds,
               tileMinZoom: tj.minzoom,
               tileMaxZoom: tj.maxzoom,
             });
 
             const map = getMapInstance();
-            if (map && tj.bounds) {
-              const [west, south, east, north] = tj.bounds;
+            if (map && tileBounds) {
+              const [west, south, east, north] = tileBounds;
               map.fitBounds([[south, west], [north, east]], { padding: [40, 40], maxZoom: 16 });
             }
           }

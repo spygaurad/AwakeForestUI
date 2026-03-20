@@ -40,6 +40,15 @@ interface MapLayersState {
   selectedFeature: SelectedFeature | null;
   measurementActive: boolean;
   measurementPoints: [number, number][];
+  currentZoom: number;
+  focusedLayerId: string | null;
+
+  /** Set by focusLayer, consumed by useMapSync → MapManager.fitBounds */
+  zoomToBounds: [number, number, number, number] | null;
+  clearZoomToBounds: () => void;
+  /** Select + zoom + open panel for a layer */
+  focusLayer: (layerId: string) => void;
+  setCurrentZoom: (zoom: number) => void;
 
   // pending annotation (drawn but not yet saved)
   pendingAnnotation: PendingAnnotation | null;
@@ -62,11 +71,14 @@ interface MapLayersState {
 
   // layer config actions
   initLayer: (id: string, type: LayerType, opts?: {
+    name?: string;
     sourceType?: LayerSourceType;
     zIndex?: number;
     tileServiceUrl?: string;
     parentDatasetId?: string;
     stacItemId?: string;
+    annotationSetId?: string;
+    classStyles?: Record<string, { fillColor: string; strokeColor: string; strokeWidth: number; fillOpacity: number }>;
   }) => void;
   removeLayer: (id: string) => void;
   setLayerVisible: (id: string, visible: boolean) => void;
@@ -91,6 +103,10 @@ interface MapLayersState {
   selectedItemsDatasetId: string | null;
   openItemsPanel: (datasetId: string) => void;
 
+  // annotation set panel
+  selectedAnnotationSetId: string | null;
+  openAnnotationSetPanel: (annotationSetId: string) => void;
+
   // right panel
   openFeaturePanel: (feature: SelectedFeature) => void;
   openStylePanel: (layerId: string) => void;
@@ -114,16 +130,59 @@ export const useMapLayersStore = create<MapLayersState>()(
     selectedFeature: null,
     selectedDatasetId: null,
     selectedItemsDatasetId: null,
+    selectedAnnotationSetId: null,
     measurementActive: false,
     measurementPoints: [],
+    currentZoom: 2,
+    focusedLayerId: null,
     pendingAnnotation: null,
     autoSaveDirty: false,
+    zoomToBounds: null,
 
     setBackendLayerId: (datasetId, layerId) =>
       set((s) => ({ backendLayerIds: { ...s.backendLayerIds, [datasetId]: layerId } })),
 
     markAutoSaveDirty: () => set({ autoSaveDirty: true }),
     clearAutoSaveDirty: () => set({ autoSaveDirty: false }),
+
+    clearZoomToBounds: () => set({ zoomToBounds: null }),
+
+    setCurrentZoom: (zoom: number) => set({ currentZoom: zoom }),
+
+    focusLayer: (layerId) => {
+      const layer = get().layers[layerId];
+      if (!layer) return;
+      const updates: Partial<MapLayersState> = {
+        selectedLayerId: layerId,
+        focusedLayerId: layerId, // Trigger map focus + pointer highlight
+      };
+
+      if (layer.bounds) {
+        updates.zoomToBounds = layer.bounds;
+      }
+
+      // Auto-open appropriate right panel
+      if (layer.type === 'dataset') {
+        Object.assign(updates, {
+          rightPanelMode: 'dataset' as const,
+          selectedDatasetId: layerId,
+          selectedFeature: null,
+        });
+      } else if (layer.sourceType === 'annotation_set' && layer.annotationSetId) {
+        Object.assign(updates, {
+          rightPanelMode: 'annotation-set' as const,
+          selectedAnnotationSetId: layer.annotationSetId,
+          selectedFeature: null,
+        });
+      } else {
+        Object.assign(updates, {
+          rightPanelMode: 'style' as const,
+          selectedFeature: null,
+        });
+      }
+
+      set(updates);
+    },
 
     initLayer: (id, type, opts) =>
       set((s) => {
@@ -137,6 +196,7 @@ export const useMapLayersStore = create<MapLayersState>()(
             ...s.layers,
             [id]: {
               id,
+              name: opts?.name,
               type,
               sourceType: opts?.sourceType,
               visible: true,
@@ -146,6 +206,8 @@ export const useMapLayersStore = create<MapLayersState>()(
               tileServiceUrl: opts?.tileServiceUrl,
               parentDatasetId: opts?.parentDatasetId,
               stacItemId: opts?.stacItemId,
+              annotationSetId: opts?.annotationSetId,
+              classStyles: opts?.classStyles,
             },
           },
         };
@@ -184,7 +246,12 @@ export const useMapLayersStore = create<MapLayersState>()(
       set((s) => ({
         layers: {
           ...s.layers,
-          [id]: { ...s.layers[id], ...config },
+          [id]: {
+            ...s.layers[id],
+            ...config,
+            // Auto-populate bounds from tileBounds for zoom-to-layer
+            bounds: config.tileBounds ?? s.layers[id]?.bounds ?? null,
+          },
         },
       })),
 
@@ -241,6 +308,9 @@ export const useMapLayersStore = create<MapLayersState>()(
 
     openItemsPanel: (datasetId) =>
       set({ rightPanelMode: 'items', selectedItemsDatasetId: datasetId, selectedFeature: null, selectedLayerId: null }),
+
+    openAnnotationSetPanel: (annotationSetId) =>
+      set({ rightPanelMode: 'annotation-set', selectedAnnotationSetId: annotationSetId, selectedFeature: null, selectedLayerId: null }),
 
     openAnnotationPanel: () =>
       set({
@@ -321,7 +391,7 @@ export const useMapLayersStore = create<MapLayersState>()(
       set((s) => s.pendingAnnotation ? { rightPanelMode: 'new-annotation' } : s),
 
     closeRightPanel: () =>
-      set({ rightPanelMode: 'none', selectedLayerId: null, selectedFeature: null, selectedDatasetId: null, selectedItemsDatasetId: null }),
+      set({ rightPanelMode: 'none', selectedLayerId: null, selectedFeature: null, selectedDatasetId: null, selectedItemsDatasetId: null, selectedAnnotationSetId: null }),
 
     toggleMeasurement: () =>
       set((s) => {
